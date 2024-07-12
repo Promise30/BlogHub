@@ -1,0 +1,63 @@
+@BloggingAPI_HostAddress = https://localhost:7156
+
+POST {{BloggingAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "userName":"Xavier",
+  "password":"xavier"
+}
+
+###
+
+GET {{BloggingAPI_HostAddress}}/api/blogs/posts
+
+###
+
+POST {{BloggingAPI_HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "xavierstyles@gmail.com"
+}
+
+###
+
+POST {{BloggingAPI_HostAddress}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+  "email":"xavierstyles@gmail.com",
+  "password": "xavier",
+  "confirmPassword":"xavier",
+  "token":"CfDJ8IvMjUgmbxZLo1LwJ9TcO4hQc1YYgvj6d9RZe7qkRyuSf3GAKITlokQZtBAydY4qZiyJTGuU7k416xXs2OWNuAhUd68xRqej9Jr8jcKff3Uy2Nq63QHd9zpPg5qaw5hFIDgblwA6bHBCRbJK5p1LNPwOLqqm9uzGyM19QnAbUkpzhw5pwfvuviJ6s+JPo1bQwHtr9HseYtL4VOEQ4PoiBrPMFFwR96e80zmIC59N+THW"
+}
+
+###
+
+POST {{BloggingAPI_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  //UserLoginDto
+}
+
+###
+
+GET {{BloggingAPI_HostAddress}}/api/auth/users
+
+###
+
+POST {{BloggingAPI_HostAddress}}/api/auth/addRolesToUsers
+Content-Type: application/json
+
+{
+  "email": "xavierstyles@gmail.com",
+  "roles": ["User"]
+}
+
+###
+
+GET {{BloggingAPI_HostAddress}}/api/auth/userRoles?email=xavierstyles@gmail.com
+
+###
