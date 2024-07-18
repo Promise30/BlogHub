@@ -10,5 +10,7 @@ namespace BloggingAPI.Domain.Entities
         public ICollection<Post> Posts { get; } = new List<Post>();
         public string? RefreshToken { get; set; }
         public DateTime RefreshTokenExpiryDate { get; set; }
+        public DateTime DateCreated { get; set; }
+        public DateTime DateModified { get; set; }
     }
 }
