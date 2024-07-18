@@ -6,7 +6,7 @@ namespace BloggingAPI.Infrastructure.Services.Interface
 {
     public interface IAuthenticationService
     { 
-        Task<ApiResponse<IdentityResult>> RegisterUser(UserRegistrationDto userRegistrationDto);
+        Task<ApiResponse<object>> RegisterUser(UserRegistrationDto userRegistrationDto);
         Task<ApiResponse<TokenDto>> ValidateUser(UserLoginDto userLoginDto);
         Task<TokenDto> CreateToken(bool populateExp);
         Task<ApiResponse<TokenDto>> RefreshToken(GetNewTokenDto tokenDto);
@@ -16,6 +16,7 @@ namespace BloggingAPI.Infrastructure.Services.Interface
         Task<ApiResponse<object>> PasswordResetAsync(PasswordResetDto passwordResetDto);
         Task<ApiResponse<object>> UserEmailConfirmation(string token, string email);
         Task<ApiResponse<object>> AddUserToRoleAsync(AddUserToRoleDto addUserToRoleDto);
+        Task<ApiResponse<object>> RemoveUserFromRoleAsync(RemoveUserFromRoleDto removeUserFromRoleDto);
         Task<ApiResponse<IEnumerable<string>>> GetUserRolesAsync(string email);
     }
 }

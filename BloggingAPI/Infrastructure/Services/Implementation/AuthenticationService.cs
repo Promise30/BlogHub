@@ -1,13 +1,19 @@
-﻿using BloggingAPI.Domain.Entities;
+﻿using BloggingAPI.Constants;
+using BloggingAPI.Domain.Entities;
 using BloggingAPI.Domain.Entities.Dtos.Requests.Auth;
 using BloggingAPI.Domain.Entities.Dtos.Responses;
 using BloggingAPI.Domain.Entities.Dtos.Responses.Posts;
+using BloggingAPI.Extensions;
 using BloggingAPI.Infrastructure.Services.Interface;
+using CloudinaryDotNet;
+using Hangfire;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq.Dynamic.Core.Tokenizer;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -21,24 +27,31 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         private readonly ILogger<AuthenticationService> _logger;
         private readonly UserManager<User> _userManager;
         private readonly IConfiguration _configuration;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IUrlHelper _urlHelper;
+        private readonly IEmailNotificationService _emailNotificationService;
+        private readonly IEmailService _emailService;
         private User _user;
-        public AuthenticationService(ILogger<AuthenticationService> logger, UserManager<User> userManager, IConfiguration configuration)
+        public AuthenticationService(ILogger<AuthenticationService> logger, UserManager<User> userManager, IConfiguration configuration, IHttpContextAccessor httpContextAccessor, IUrlHelper urlHelper, IEmailNotificationService emailNotificationService, IEmailService emailService)
         {
             _logger = logger;
             _userManager = userManager;
             _configuration = configuration;
+            _httpContextAccessor = httpContextAccessor;
+            _urlHelper = urlHelper;
+            _emailNotificationService = emailNotificationService;
+            _emailService = emailService;
         }
-        public async Task<ApiResponse<IdentityResult>> RegisterUser(UserRegistrationDto userRegistrationDto)
+        public async Task<ApiResponse<object>> RegisterUser(UserRegistrationDto userRegistrationDto)
         {
             try
             {
                 var existingUser = await _userManager.FindByEmailAsync(userRegistrationDto.Email);
-                if (existingUser != null)
+                if (existingUser is not null)
                 {
                     _logger.Log(LogLevel.Information, $"Existing user found when trying to register new user with email: {userRegistrationDto.Email} at {DateTime.Now.ToString("yy-MM-dd:H m s")}");
-                    return ApiResponse<IdentityResult>.Failure(400, "User already exists.");
+                    return ApiResponse<object>.Failure(400, "User already exists.");
                 }
-
                 var user = new User
                 {
                     UserName = userRegistrationDto.UserName,
@@ -48,24 +61,37 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                     LastName = userRegistrationDto.LastName,
                     SecurityStamp = Guid.NewGuid().ToString(),
                     RefreshToken = string.Empty,
-                    
                 };
                 var result = await _userManager.CreateAsync(user, userRegistrationDto.Password);
                 if (!result.Succeeded)
                 {
-                    _logger.Log(LogLevel.Information, $"Error occured while creating new user {userRegistrationDto.Email}: {result.Errors}");
-                    return ApiResponse<IdentityResult>.Failure(400, result.Errors.ToString());
+                   
+                    var errors = result.Errors.Select(x => new { error = x.Code, Description = x.Description });
+                    var errorString = string.Join("; ", errors);
+                    _logger.Log(LogLevel.Information, $"Error occured while creating new user {userRegistrationDto.Email}: {errorString}");
+                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message:"Request unsuccessful");
                 }
 
-                _logger.Log(LogLevel.Information, $"New user created with username-> {userRegistrationDto.UserName} at {DateTime.Now.ToString("yy-MM-dd:H m s")}");
+                _logger.Log(LogLevel.Information, $"New user created with username-> {user.UserName} and id -> {user.Id} at {user.DateCreated}");
                 await _userManager.AddToRolesAsync(user, userRegistrationDto.Roles);
-                return ApiResponse<IdentityResult>.Success(200,result, "Registration Successful");
+
+                var userToReturn = user.MapToUserResponseDto(userRegistrationDto.Roles);
+
+                // Schedule a background task to send email confirmation link
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+
+                // Generate confirmation link
+                var confirmationLink = _urlHelper.Action("ConfirmEmail", "Authentication", new { email = user.Email, token = token }, _httpContextAccessor.HttpContext.Request.Scheme);
+
+                BackgroundJob.Enqueue(() => _emailNotificationService.SendEmailConfirmationLinkAsync(confirmationLink, user.Email));
+
+                return ApiResponse<object>.Success(200,userToReturn, "Registration Successful");
             }
             catch (Exception ex)
             {
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.LogInformation($"Error occured while adding a registering a new user: {ex.Message}");
-                return ApiResponse<IdentityResult>.Failure(500, "User could not be created");
+                return ApiResponse<object>.Failure(500, "User could not be created");
             }
         }
 
@@ -78,7 +104,7 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 var result = (_user != null && await _userManager.CheckPasswordAsync(_user, userLoginDto.Password));
                 if (!result)
                 {
-                    _logger.Log(LogLevel.Warning, $"{nameof(ValidateUser)}: Authentication failed. Wrong user name or password.");
+                    _logger.Log(LogLevel.Warning, $"{nameof(ValidateUser)}: Authentication failed. Invalid user name or password.");
                     return ApiResponse<TokenDto>.Failure(401, "Authentication failed. Invalid credentials");
                 }
                 var token = await CreateToken(true);
@@ -123,8 +149,18 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 if (user is null)
                     return ApiResponse<string>.Success(400, null, "Request unsuccessful");
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                _logger.Log(LogLevel.Information, $"Password reset token generated for {user.UserName} at {DateTime.Now}: {token}");
+
+                // Generate confirmation link
+               
+                var resetPasswordLink = _urlHelper.Action("ResetPassword", "Authentication", new { email = user.Email, token = token }, _httpContextAccessor.HttpContext.Request.Scheme);
+                _logger.Log(LogLevel.Information, $"Password reset token generated for {user.UserName} -> {token}");
+                
+
+                // Schedule a background job to send the mail
+                BackgroundJob.Enqueue(() => _emailNotificationService.SendResetPasswordPasswordEmailAsync(resetPasswordLink, user.Email));
+                
                 return ApiResponse<string>.Success(200, token, null);
+
                 
             }
             catch (Exception ex)
@@ -173,7 +209,7 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                     _logger.Log(LogLevel.Information, $"Email confirmation successful for {_user.UserName} at {DateTime.Now}");
                     return ApiResponse<object>.Success(200, "User email verification successful", null);
                 }
-                return ApiResponse<object>.Failure(400, result.Errors.ToList(), "User email verification failed.");
+                return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, Description = x.Description }), "User email verification failed.");
 
             }
             catch (Exception ex)
@@ -234,7 +270,7 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 if (!result.Succeeded)
                 {
                     _logger.Log(LogLevel.Information, $"Error occured while adding roles to user: {result.Errors.ToList()}");
-                    return ApiResponse<object>.Failure(400, "Request unsuccesful");
+                    return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, Description = x.Description }), "Request unsuccesful");
                 }
 
                 return ApiResponse<object>.Success(204, null);
@@ -246,10 +282,34 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 return ApiResponse<object>.Failure(400, "Request unsuccesful");
             }
         }
+        public async Task<ApiResponse<object>> RemoveUserFromRoleAsync(RemoveUserFromRoleDto removeUserFromRoleDto)
+        {
+            try
+            {
+                _user = await _userManager.FindByEmailAsync(removeUserFromRoleDto.Email);
+                if (_user == null)
+                    return ApiResponse<object>.Failure(400, "User does not exist");
+                var result = await _userManager.RemoveFromRolesAsync(_user, removeUserFromRoleDto.Roles);
+                if (!result.Succeeded)
+                {
+                    _logger.Log(LogLevel.Information, $"Error occured while removing user from roles: {result.Errors.Select(x=> new {error = x.Code, Description = x.Description})}");
+                    return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, Description = x.Description }), "Request unsuccesful");
+                }
+
+                return ApiResponse<object>.Success(204, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, $"Error occured while adding roles to user: {ex.Message}");
+                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+            }
+        }
         public async Task<ApiResponse<IEnumerable<string>>> GetUserRolesAsync(string email)
         {
             try
             {
+                
                 _user = await _userManager.FindByEmailAsync(email);
                 if (_user == null)
                     return ApiResponse<IEnumerable<string>>.Failure(400, "User does not exist");
@@ -288,8 +348,8 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         }
         private SigningCredentials GetSigningCredentials()
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var key = Encoding.UTF8.GetBytes(jwtSettings["secretKey"]);
+            var jwtSettings = _configuration.GetSection("JwtSettings").Get<JwtConfiguration>();
+            var key = Encoding.UTF8.GetBytes(jwtSettings.secretKey);
             var secret = new SymmetricSecurityKey(key);
             return new SigningCredentials(secret, SecurityAlgorithms.HmacSha256);
         }
@@ -299,7 +359,6 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
              {
              new Claim(ClaimTypes.Name, _user.UserName),
              new Claim(ClaimTypes.NameIdentifier, _user.Id),
-             new Claim(ClaimTypes.Email, _user.Email),
              };
             var roles = await _userManager.GetRolesAsync(_user);
             foreach (var role in roles)
@@ -310,13 +369,13 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         }
         private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var jwtSettings = _configuration.GetSection("JwtSettings").Get<JwtConfiguration>();
             var tokenOptions = new JwtSecurityToken
             (
-            issuer: jwtSettings["validIssuer"],
-            audience: jwtSettings["validAudience"],
+            issuer: jwtSettings.validIssuer,
+            audience: jwtSettings.validAudience,
             claims: claims,
-            expires: DateTime.Now.AddMinutes(Convert.ToDouble(jwtSettings["expires"])),
+            expires: DateTime.Now.AddMinutes(Convert.ToDouble(jwtSettings.expires)),
             signingCredentials: signingCredentials
             );
             return tokenOptions;
@@ -332,16 +391,16 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         }
         private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var jwtSettings = _configuration.GetSection("JwtSettings").Get<JwtConfiguration>();
             var tokenValidationParameters = new TokenValidationParameters
             {
                 ValidateAudience = true,
                 ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["secretKey"])),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.secretKey)),
                 ValidateLifetime = true,
-                ValidIssuer = jwtSettings["validIssuer"],
-                ValidAudience = jwtSettings["validAudience"]
+                ValidIssuer = jwtSettings.validIssuer,
+                ValidAudience = jwtSettings.validAudience,
             };
             var tokenHandler = new JwtSecurityTokenHandler();
             SecurityToken securityToken;
@@ -354,6 +413,14 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
             }
             return principal;
         }
+
+        
+        //private async Task<string> GetEmailConfirmationLink(User user)
+        //{
+
+        //    var confirmationLink = _urlHelper.Action("ConfirmEmail", "Authentication", new { email = user.Email, token = token }, _httpContextAccessor.HttpContext.Request.Scheme);
+
+        //}
         #endregion
     }
 
