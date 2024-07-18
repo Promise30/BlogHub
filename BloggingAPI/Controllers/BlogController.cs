@@ -1,4 +1,5 @@
-﻿using BloggingAPI.Domain.Entities.Dtos.Requests.Comments;
+﻿using BloggingAPI.Domain.Entities;
+using BloggingAPI.Domain.Entities.Dtos.Requests.Comments;
 using BloggingAPI.Domain.Entities.Dtos.Requests.Posts;
 using BloggingAPI.Domain.Entities.Dtos.Responses;
 using BloggingAPI.Domain.Entities.RequestFeatures;
@@ -14,7 +15,7 @@ namespace BloggingAPI.Controllers
 {
     [Route("api/blogs")]
     [ApiController]
-    //[Authorize]
+    [Authorize]
     //[ApiExplorerSettings(GroupName = "v1")]
     public class BlogController : ControllerBase
     {
@@ -53,16 +54,19 @@ namespace BloggingAPI.Controllers
             var result = await _bloggingService.CreatePostAsync(createPostDto);
             return CreatedAtAction(nameof(GetPost), new { id = result.Data.Id }, result.Data);
         }
+        [Authorize]
         [HttpPut("posts/{postId:int}")]
         public async Task<IActionResult> UpdatePost(int postId, UpdatePostDto updatePostDto)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ApiResponse<ModelStateDictionary>.Success(400, ModelState, "Invalid payload"));
+                return BadRequest(ModelState);
+                //return BadRequest(ApiResponse<ModelStateDictionary>.Success(400, ModelState, "Invalid payload"));
             }
             var result = await _bloggingService.UpdatePostAsync(postId, updatePostDto);
-            return StatusCode(result.StatusCode);
+            return StatusCode(result.StatusCode, result);
         }
+        [Authorize]
         [HttpDelete("posts/{id:int}")]
         public async Task<IActionResult> DeletePost(int id)
         {
@@ -95,6 +99,7 @@ namespace BloggingAPI.Controllers
             var result = await _bloggingService.CreateCommentForPostAsync(postId, createCommentDto);
             return CreatedAtAction(nameof(GetCommentForPost), new { postId = postId, commentId = result.Data.Id }, result.Data);
         }
+        [Authorize]
         [HttpPut("posts/{postId:int}/comments/{commentId:int}")]
         public async Task<IActionResult> UpdateCommentForPost(int postId, int commentId, [FromBody] UpdateCommentDto updateCommentDto)
         {
@@ -105,10 +110,18 @@ namespace BloggingAPI.Controllers
             var result = await _bloggingService.UpdateCommentForPostAsync(postId, commentId, updateCommentDto);
             return StatusCode(result.StatusCode, result);
         }
+        [Authorize]
         [HttpDelete("posts/{postId:int}/comments/{commentId:int}")]
         public async Task<IActionResult> DeleteCommentForPost(int postId, int commentId)
         {
             var result = await _bloggingService.DeleteCommentForPostAsync(postId, commentId);
+            return StatusCode(result.StatusCode, result);
+        }
+        [Authorize]
+        [HttpPost("posts/{postId:int}/comments/{commentId:int}/vote")]
+        public async Task<IActionResult> VoteComment(int postId, int commentId, [FromBody]VotePayload votePayload)
+        {
+            var result = await _bloggingService.VoteCommentAsync(postId, commentId, votePayload.IsUpVote);
             return StatusCode(result.StatusCode, result);
         }
     }
