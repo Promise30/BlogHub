@@ -1,4 +1,5 @@
-﻿using BloggingAPI.Domain.Entities.Dtos.Requests.Comments;
+﻿using BloggingAPI.Domain.Entities;
+using BloggingAPI.Domain.Entities.Dtos.Requests.Comments;
 using BloggingAPI.Domain.Entities.Dtos.Requests.Posts;
 using BloggingAPI.Domain.Entities.Dtos.Responses;
 using BloggingAPI.Domain.Entities.Dtos.Responses.Posts;
@@ -13,7 +14,7 @@ namespace BloggingAPI.Infrastructure.Services.Interface
         Task<ApiResponse<PostOnlyDto>> GetPostonlyAsync(int postId);
         Task<ApiResponse<PostWithCommentsDto>> GetPostWithCommentsAsync(int postId);
         Task<ApiResponse<PostOnlyDto>> CreatePostAsync(CreatePostDto post);
-        Task<ApiResponse<object>> UpdatePostAsync(int postId, UpdatePostDto updatePostDto); 
+        Task<ApiResponse<object>> UpdatePostAsync(int postId, UpdatePostDto updatePostDto);
         Task<ApiResponse<object>> DeletePostAsync(int postId);
 
         // Comments
@@ -22,5 +23,7 @@ namespace BloggingAPI.Infrastructure.Services.Interface
         Task<ApiResponse<CommentDto>> CreateCommentForPostAsync(int postId, CreateCommentDto createCommentDto);
         Task<ApiResponse<object>> UpdateCommentForPostAsync(int postId, int commentId, UpdateCommentDto updateCommentDto);
         Task<ApiResponse<object>> DeleteCommentForPostAsync(int postId, int commentId);
+
+        Task<ApiResponse<object>> VoteCommentAsync(int postId, int commentId, bool? isUpVote);
     }
 }

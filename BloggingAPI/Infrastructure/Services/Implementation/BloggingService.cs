@@ -14,6 +14,7 @@ using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using MimeKit;
 using System.Security.Claims;
 using System.Text.Json;
@@ -90,11 +91,20 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         {
             try
             {
+               
                 var post = await GetPostFromDb(postId);
                 if (post is null)
                     return ApiResponse<object>.Failure(404, "Post does not exist.");
+
+                // check eligibility to delete a post
+                var currentUserId = GetCurrentUserId();
+                var currentUserRoles = GetCurrentUserRoles();
+                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator")) 
+                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+
                 _repositoryManager.Post.DeletePost(post);
                 await _repositoryManager.SaveAsync();
+
                 if (!string.IsNullOrEmpty(post.PostImageUrl))
                 {
                      var publicId = post.ImagePublicId;
@@ -163,20 +173,43 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
         }
         private async Task<Post> GetPostFromDb(int postId) =>
              await _repositoryManager.Post.GetPostAsync(postId);
-        private string GetCurrentUserName()
-        {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Name)?.Value;
-        }
-        private string GetCurrentUserId()
-        {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        }
 
-        private string GetCurrentUserEmail()
+        public async Task<ApiResponse<object>> VoteCommentAsync(int postId, int commentId, bool? isUpVote)
         {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Email)?.Value;
+            try
+            {
+                _logger.Log(LogLevel.Information, $"User's vote option: {isUpVote}");
+                var currentUserId = GetCurrentUserId();
+                var existingVote = await _repositoryManager.CommentVote.GetCommentVoteForCommentAsync(commentId, currentUserId);
+                if (existingVote == null)
+                {
+                    var newCommentVote = new CommentVote
+                    {
+                        UserId = currentUserId,
+                        CommentId = commentId,
+                        IsUpVote = isUpVote
+                    };
+                    _repositoryManager.CommentVote.AddCommentVote(newCommentVote);
+                }
+                else if (existingVote.IsUpVote != isUpVote)
+                {
+                    existingVote.IsUpVote = isUpVote;
+                    _repositoryManager.CommentVote.UpdateCommentVote(existingVote);
+                }
+                else
+                {
+                    _repositoryManager.CommentVote.DeleteCommentVote(existingVote);
+                }
+                await _repositoryManager.SaveAsync();
+                return ApiResponse<object>.Success(204, null, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Error, $"Error occured while voting on the comment: {ex.Message}");
+                return ApiResponse<object>.Failure(500, "Request unsucessful");
+            }
         }
-
         public async Task<ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>> GetAllCommentsForPostAsync(int postId, CommentParameters commentParameters)
         {
             try
@@ -283,6 +316,14 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 var commmentToDelete = await _repositoryManager.Comment.GetCommentForPostAsync(postId, commentId);
                 if (commmentToDelete is null)
                     return ApiResponse<object>.Failure(404, "Comment does not exist");
+
+                // check eligibility to delete comment
+                var currentUserId = GetCurrentUserId();
+                var currentUserRoles = GetCurrentUserRoles();
+                var currentUserName = GetCurrentUserName();
+                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator") && currentUserName != commmentToDelete.Author)
+                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+
                 _repositoryManager.Comment.DeleteComment(commmentToDelete);
                 await _repositoryManager.SaveAsync();
                 _logger.Log(LogLevel.Information, $"Comment with Id: {commmentToDelete.Id} successfully deleted from the database");
@@ -307,6 +348,14 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 var commentEntity = await _repositoryManager.Comment.GetCommentForPostAsync(postId, commentId);
                 if (commentEntity is null)
                     return ApiResponse<object>.Failure(404, "Comment does not exist");
+
+                // check eligibility to delete comment
+                var currentUserId = GetCurrentUserId();
+                var currentUserRoles = GetCurrentUserRoles();
+                var currentUserName = GetCurrentUserName();
+                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator") && currentUserName != commentEntity.Author)
+                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+
                 commentEntity.Content = updateCommentDto.Content;
 
                 _repositoryManager.Comment.UpdateCommentForPost(commentEntity);
@@ -329,8 +378,13 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 var postEntity = await GetPostFromDb(postId);
                 if (postEntity is null)
                     return ApiResponse<object>.Failure(404, "Post does not exist");
+                // check eligibility to update a post
+                var currentUserId = GetCurrentUserId();
+                var currentUserRoles = GetCurrentUserRoles();
+                if (currentUserId != postEntity.UserId && !currentUserRoles.Contains("Administrator"))
+                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
 
-                if(updatePostDto.PostCoverImage != null)
+                if (updatePostDto.PostCoverImage != null)
                 {
                     if (!string.IsNullOrEmpty(postEntity.PostImageUrl))
                     {
@@ -366,5 +420,29 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
                 return ApiResponse<object>.Failure(500, "Request unsucessful");
             }
         }
+        
+        #region Private methods
+        private string GetCurrentUserName()
+        {
+            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Name)?.Value;
+        }
+        private string GetCurrentUserId()
+        {
+            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        private string GetCurrentUserEmail()
+        {
+            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Email)?.Value;
+        }
+        private IEnumerable<string> GetCurrentUserRoles()
+        {
+            return _httpContextAccessor.HttpContext.User.Claims
+                .Where(c => c.Type == ClaimTypes.Role)
+                .Select(c => c.Value);
+        }
+
+        
+        #endregion
     }
 }
