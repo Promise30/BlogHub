@@ -18,12 +18,15 @@ public class ApplicationDbContext : IdentityDbContext<User>
         modelBuilder.Entity<Comment>()
                    .HasOne(c => c.Post)
                    .WithMany(c => c.Comment)
-                   .HasForeignKey(c => c.PostId);
+                   .HasForeignKey(c => c.PostId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<Post>()
                     .HasMany(p => p.Comment)
                     .WithOne(p => p.Post)
                     .HasForeignKey(p => p.PostId)
-                    .IsRequired();
+                    .IsRequired()
+                    .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Post>()
             .Property(p => p.Title)
             .IsRequired();
@@ -42,7 +45,24 @@ public class ApplicationDbContext : IdentityDbContext<User>
         modelBuilder.Entity<Post>()
             .Property(p=>p.ImageFormat)
             .IsRequired(false);
-      
+
+
+        modelBuilder.Entity<User>()
+            .Property(u => u.DateCreated).HasDefaultValueSql("GETDATE()");
+        modelBuilder.Entity<User>()
+            .Property(u => u.DateModified).HasDefaultValueSql("GETDATE()");
+
+        modelBuilder.Entity<CommentVote>()
+            .HasOne(cv => cv.Comment)
+            .WithMany(c => c.Votes)
+            .HasForeignKey(cv => cv.CommentId)
+            .OnDelete(DeleteBehavior.Restrict); // Changed from Cascade to Restrict
+
+        modelBuilder.Entity<CommentVote>()
+            .HasOne(cv => cv.User)
+            .WithMany()
+            .HasForeignKey(cv => cv.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<IdentityRole>().HasData(
          new IdentityRole
