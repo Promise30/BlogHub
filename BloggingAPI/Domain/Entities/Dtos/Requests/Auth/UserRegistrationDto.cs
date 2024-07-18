@@ -19,12 +19,10 @@ namespace BloggingAPI.Domain.Entities.Dtos.Requests.Auth
         [EmailAddress(ErrorMessage = "A valid email address is required")]
         public string? Email { get; init; }
         [Required(ErrorMessage = "A valid phone number is required")]
+        [Phone]
         [StringLength(11, ErrorMessage = "Phone number must be 11 digits")]
         public string? PhoneNumber { get; init; }
         [ValidRoles(ErrorMessage ="Invalid role specified")]
-        public ICollection<string>? Roles { get; init; }
-        
-
-        
+        public ICollection<string>? Roles { get; init; }        
     }
 }
