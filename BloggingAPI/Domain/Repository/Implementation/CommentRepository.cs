@@ -31,6 +31,7 @@ namespace BloggingAPI.Domain.Repository.Implementation
             return await FindByCondition(c=> c.PostId == postId && c.Id == commentId)
                     .SingleOrDefaultAsync();    
         }
+        
         public async Task<PagedList<Comment>> GetCommentsForPostAsync(int postId, CommentParameters commentParameters)
         {
             var startDateAsDateTime = commentParameters.StartDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue;

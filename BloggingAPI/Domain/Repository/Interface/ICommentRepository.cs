@@ -11,5 +11,6 @@ namespace BloggingAPI.Domain.Repository.Interface
         void CreateCommentForPost(int postId, Comment comment);
         void DeleteComment(Comment comment);
         void UpdateCommentForPost(Comment comment);
+       
     }
 }

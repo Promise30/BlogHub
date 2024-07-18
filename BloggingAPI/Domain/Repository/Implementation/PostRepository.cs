@@ -58,6 +58,7 @@ namespace BloggingAPI.Domain.Repository.Implementation
         {
             return await FindByCondition(p => p.Id.Equals(id))
                                     .Include(c => c.Comment)
+                                    .ThenInclude(cv=>cv.Votes)
                                     .SingleOrDefaultAsync();
         }
     }

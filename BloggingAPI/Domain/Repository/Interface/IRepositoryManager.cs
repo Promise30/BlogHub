@@ -4,6 +4,7 @@
     {
         IPostRepository Post { get; }
         ICommentRepository Comment { get; }
+        ICommentVoteRepository CommentVote { get; }
         Task SaveAsync();
     }
 }

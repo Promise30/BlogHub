@@ -8,6 +8,7 @@ namespace BloggingAPI.Domain.Repository.Implementation
         private ApplicationDbContext _applicationDbContext;
         private IPostRepository _postRepository;
         private ICommentRepository _commentRepository;
+        private ICommentVoteRepository _commentVoteRepository;
 
         public RepositoryManager(ApplicationDbContext applicationDbContext)
         {   
@@ -36,7 +37,19 @@ namespace BloggingAPI.Domain.Repository.Implementation
                 return _commentRepository;
             }
         }
-        
+        public ICommentVoteRepository CommentVote
+        {
+            get
+            {
+                if (_commentVoteRepository == null)
+                {
+                    _commentVoteRepository = new CommentVoteRepository(_applicationDbContext);
+                }
+
+                return _commentVoteRepository;
+            }
+        }
+
         public Task SaveAsync() => _applicationDbContext.SaveChangesAsync();
     }
 }
