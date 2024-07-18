@@ -16,8 +16,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters;
-using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -40,12 +38,8 @@ try
     });
 
     // Add services to the container.
-    
-    builder.Services.Configure<EmailConfiguration>(
-            builder.Configuration.GetSection("EmailConfiguration"));
-
-    builder.Services.AddSingleton(sp =>
-        sp.GetRequiredService<IOptions<EmailConfiguration>>().Value);
+    var emailConfig = builder.Configuration.GetSection("EmailConfiguration").Get<EmailConfiguration>();
+    builder.Services.AddSingleton(emailConfig);
     builder.Services.ConfigureSqlContext(builder.Configuration);
     builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
     builder.Services.ConfigureIdentity();
@@ -60,31 +54,21 @@ try
     builder.Services.AddHangfireServer();
     builder.Services.ConfigureAuthentication(builder.Configuration);
     builder.Services.ConfigureCors();
-    builder.Services.Configure<ApiBehaviorOptions>(options =>
-    {
-        options.SuppressModelStateInvalidFilter = true;
-    });
-    builder.Services.AddHttpContextAccessor();
-    builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
-    builder.Services.AddScoped<IUrlHelper>(x => {
-        var actionContext = x.GetRequiredService<IActionContextAccessor>().ActionContext;
-        var factory = x.GetRequiredService<IUrlHelperFactory>();
-        return factory.GetUrlHelper(actionContext);
-    });
     builder.Services.AddControllers();
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-    //builder.Services.AddEndpointsApiExplorer();
-    //builder.Services.ConfigureSwaggerGen();
-
-    builder.Services.ConfigureSwaggerGen();
     builder.Services.AddEndpointsApiExplorer();
+    builder.Services.ConfigureSwaggerGen();
+    
     var app = builder.Build();
 
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
-        app.UseSwaggerUI();
+        app.UseSwaggerUI(config =>
+        {
+            config.SwaggerEndpoint("/swagger/v1/swagger.json", "Blog Platform API");
+        });
     }
     app.UseHttpsRedirection();
     app.UseAuthentication();
