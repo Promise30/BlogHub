@@ -57,7 +57,8 @@ namespace BloggingAPI.Extensions
             })
             .AddEntityFrameworkStores<ApplicationDbContext>().
             AddDefaultTokenProviders();
-        public static void ConfigureAuthentication(this IServiceCollection services, IConfiguration configuration)=>
+        public static void ConfigureAuthentication(this IServiceCollection services, IConfiguration configuration) {
+            var jwtSettings = configuration.GetSection("JwtSettings").Get<JwtConfiguration>();
            services.AddAuthentication(options =>
            {
                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -71,12 +72,14 @@ namespace BloggingAPI.Extensions
                    ValidateAudience = true,
                    ValidateLifetime = true,
                    ValidateIssuerSigningKey = true,
-                   ValidIssuer = configuration["JwtSettings:validIssuer"],
-                   ValidAudience = configuration["JwtSettings:validAudience"],
+                   ValidIssuer = jwtSettings.validIssuer,
+                   ValidAudience = jwtSettings.validAudience,
                    ClockSkew = TimeSpan.Zero,
-                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JwtSettings:secretKey"]))
+                   IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.secretKey))
                };
-           });
+           }); 
+        }
+
         public static void ConfigureSwaggerGen(this IServiceCollection services) =>
             services.AddSwaggerGen(options =>
             {
@@ -97,19 +100,19 @@ namespace BloggingAPI.Extensions
                             Scheme = "Bearer"
                         });
                         options.AddSecurityRequirement(new OpenApiSecurityRequirement
-                {
-                    {
-                        new OpenApiSecurityScheme
                         {
-                            Reference = new OpenApiReference
                             {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = "Bearer"
+                                new OpenApiSecurityScheme
+                                {
+                                    Reference = new OpenApiReference
+                                    {
+                                        Type = ReferenceType.SecurityScheme,
+                                        Id = "Bearer"
+                                    }
+                                },
+                                    new string[]{}
                             }
-                        },
-                            new string[]{}
-                    }
-                });
+                        });
             });
     }
 }
