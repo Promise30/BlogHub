@@ -1,15 +1,10 @@
-
-
-using BloggingAPI.Constants;
-using BloggingAPI.Data;
 using BloggingAPI.Domain.Entities;
-using BloggingAPI.Domain.Repository.Implementation;
-using BloggingAPI.Domain.Repository.Interface;
-using BloggingAPI.Extensions;
-using BloggingAPI.Infrastructure.Services.Implementation;
-using BloggingAPI.Infrastructure.Services.Interface;
-using BloggingAPI.Network.Implementation;
-using BloggingAPI.Network.Interface;
+using BloggingAPI.Domain.Repositories;
+using BloggingAPI.Persistence.Extensions;
+using BloggingAPI.Persistence.Repositories;
+using BloggingAPI.Services.Constants;
+using BloggingAPI.Services.Implementation;
+using BloggingAPI.Services.Interface;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -52,7 +47,6 @@ try
     builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
     builder.Services.AddScoped<IBloggingService, BloggingService>();
     builder.Services.AddHttpClient();
-    builder.Services.AddScoped<IApiClient, ApiClient>();
     builder.Services.AddScoped<IEmailService, EmailService>();
     builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
     builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
