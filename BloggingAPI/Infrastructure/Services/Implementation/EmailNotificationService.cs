@@ -2,6 +2,7 @@
 using BloggingAPI.Domain.Entities;
 using BloggingAPI.Domain.Repository.Interface;
 using BloggingAPI.Infrastructure.Services.Interface;
+using CloudinaryDotNet;
 
 namespace BloggingAPI.Infrastructure.Services.Implementation
 {
@@ -18,6 +19,59 @@ namespace BloggingAPI.Infrastructure.Services.Implementation
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
             _repositoryManager = repositoryManager;
+        }
+        public async Task SendEmailConfirmationLinkAsync(string url, string email)
+        {
+            try
+            { 
+                var emailBody = $@"
+                    <!DOCTYPE html>
+                    <html>
+                    <body>
+                        <p>Thank you for registering to use our service</p>
+                        <p>Kindly, click on the link below to confirm your email registration</p>
+                        <p>{url}</p>
+                        <p>Best regards,<br/>Blogging Platform Service.</p>
+                    </body>
+                    </html>";
+                var message = new EmailMessage(new string[] { email }, "Email Confirmation", emailBody);
+                
+                var emailResponse = await _emailService.SendEmail(message);
+                _logger.Log(LogLevel.Information, $"Response from sending mail: {emailResponse}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.LogInformation($"Error occurred while sending new post notification email: {ex.Message}");
+            }
+
+        }
+        public async Task SendResetPasswordPasswordEmailAsync(string url, string email)
+        {
+            try
+            {
+                var emailBody = $@"
+                    <!DOCTYPE html>
+                    <html>
+                    <body>
+                        <p>Your requested to change your password</p>
+                        <p>Kindly, click on the link below to reset your password</p>
+                        <p>{url}</p>
+                        <p>If you do not request to change your password, kindly disregard this mail</p>
+                        <p>Best regards,<br/>Blogging Platform Service.</p>
+                    </body>
+                    </html>";
+                var message = new EmailMessage(new string[] { email }, "Password Reset Link", emailBody);
+
+                var emailResponse = await _emailService.SendEmail(message);
+                _logger.Log(LogLevel.Information, $"Response from sending mail: {emailResponse}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.LogInformation($"Error occurred while sending new post notification email: {ex.Message}");
+            }
+
         }
         public async Task SendNewPostNotificationAsync(Post newPost)
         {
