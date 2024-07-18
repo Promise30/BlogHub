@@ -4,6 +4,7 @@ using BloggingAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240717132922_AddVoteRelatedPropertiesToCommentModelAndCreatedCommentVoteModel")]
+    partial class AddVoteRelatedPropertiesToCommentModelAndCreatedCommentVoteModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -43,6 +46,9 @@ namespace BloggingAPI.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
 
+                    b.Property<int>("DownVoteCount")
+                        .HasColumnType("int");
+
                     b.Property<int>("PostId")
                         .HasColumnType("int");
 
@@ -50,6 +56,9 @@ namespace BloggingAPI.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<int>("UpVoteCount")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -69,12 +78,12 @@ namespace BloggingAPI.Migrations
                     b.Property<int>("CommentId")
                         .HasColumnType("int");
 
-                    b.Property<bool?>("IsUpVote")
-                        .HasColumnType("bit");
-
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("VoteType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -257,14 +266,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "c494cf53-dab5-4dfa-932b-25be24d5ef1f",
+                            Id = "838c8f54-4d0b-4289-b3b8-777ea1afdeb1",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "5ba4a8b6-a667-4056-8bac-d81e1f7f7e3d",
+                            Id = "ff513911-6788-4b75-a5b0-62b8c68a63ae",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
@@ -399,7 +408,7 @@ namespace BloggingAPI.Migrations
                     b.HasOne("BloggingAPI.Domain.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Comment");

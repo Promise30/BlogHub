@@ -4,6 +4,7 @@ using BloggingAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240717211410_ReplaceEnumPropertyOfCommentAndVoteEntityWithBoolean")]
+    partial class ReplaceEnumPropertyOfCommentAndVoteEntityWithBoolean
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -69,7 +72,7 @@ namespace BloggingAPI.Migrations
                     b.Property<int>("CommentId")
                         .HasColumnType("int");
 
-                    b.Property<bool?>("IsUpVote")
+                    b.Property<bool>("IsUpVote")
                         .HasColumnType("bit");
 
                     b.Property<string>("UserId")
@@ -257,14 +260,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "c494cf53-dab5-4dfa-932b-25be24d5ef1f",
+                            Id = "2f681d60-3ace-4a93-aa0b-7e49640fd995",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "5ba4a8b6-a667-4056-8bac-d81e1f7f7e3d",
+                            Id = "cc94f7c3-94fd-41ec-9462-c4fe487b113a",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"

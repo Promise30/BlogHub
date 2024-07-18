@@ -4,6 +4,7 @@ using BloggingAPI.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240712162532_AddedTimeStampsToUserEntity")]
+    partial class AddedTimeStampsToUserEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,33 +59,6 @@ namespace BloggingAPI.Migrations
                     b.HasIndex("PostId");
 
                     b.ToTable("PostComments");
-                });
-
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CommentId")
-                        .HasColumnType("int");
-
-                    b.Property<bool?>("IsUpVote")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CommentId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("CommentVote");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
@@ -257,14 +233,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "c494cf53-dab5-4dfa-932b-25be24d5ef1f",
+                            Id = "234479fe-c14f-472c-be2f-5b4ed7d0b203",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "5ba4a8b6-a667-4056-8bac-d81e1f7f7e3d",
+                            Id = "05e9b439-7d94-4c9e-bba2-8906a9eabbe6",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
@@ -388,25 +364,6 @@ namespace BloggingAPI.Migrations
                     b.Navigation("Post");
                 });
 
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
-                {
-                    b.HasOne("BloggingAPI.Domain.Entities.Comment", "Comment")
-                        .WithMany("Votes")
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BloggingAPI.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Comment");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
                 {
                     b.HasOne("BloggingAPI.Domain.Entities.User", "User")
@@ -467,11 +424,6 @@ namespace BloggingAPI.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.Comment", b =>
-                {
-                    b.Navigation("Votes");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
