@@ -18,9 +18,11 @@ namespace BloggingAPI.Contracts.Dtos.Requests.Auth
         [Required(ErrorMessage = "Email is required")]
         [EmailAddress(ErrorMessage = "A valid email address is required")]
         public string? Email { get; init; }
-        [Required(ErrorMessage = "A valid phone number is required")]
-        [Phone]
-        [StringLength(11, ErrorMessage = "Phone number must be 11 digits")]
+        [Required(ErrorMessage ="Phone country code is required")]
+        [RegularExpression(@"^\+\d{1,3}$", ErrorMessage = "Invalid country code format. Use '+' followed by 1-3 digits")]
+        public string PhoneCountryCode { get; init; }
+        [Required(ErrorMessage = "Phone number is required")]
+        [RegularExpression(@"^\d{10}$", ErrorMessage = "Phone number must be exactly 10 digits")]
         public string? PhoneNumber { get; init; }
         [ValidRoles(ErrorMessage = "Invalid role specified")]
         public ICollection<string>? Roles { get; init; }
