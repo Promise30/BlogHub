@@ -15,7 +15,7 @@ namespace BloggingAPI.Persistence.Extensions
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
+                PhoneNumber = $"{user.PhoneCountryCode} {user.PhoneNumber}",
                 Roles = roles.ToList(),
                 DateCreated = user.DateCreated,
                 DateModified = user.DateModified,
@@ -54,7 +54,7 @@ namespace BloggingAPI.Persistence.Extensions
                 Content = post.Content,
                 Author = post.Author,
                 PostImageUrl = post.PostImageUrl,
-                PublishedOn = post.PublishedOn.ToShortDateString(),
+                PublishedOn = post.PublishedOn,
                 Category = post.Category.ToString(),
 
             };
