@@ -2,9 +2,10 @@
 using System.Reflection;
 using System.Text;
 using System.Linq.Dynamic.Core;
-using BloggingAPI.Domain.Enums;
+
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using BloggingAPI.Domain.Enums;
 
 
 namespace BloggingAPI.Persistence.Repositories.RepositoryExtensions
