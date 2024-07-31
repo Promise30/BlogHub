@@ -61,8 +61,8 @@ namespace BloggingAPI.Services.Implementation
                 {
                     Title = post.Title,
                     PostImageUrl = imageUploadResult?.Uri?.ToString() ?? string.Empty,
-                    ImagePublicId = imageUploadResult.PublicId ?? string.Empty,
-                    ImageFormat = imageUploadResult.Format ?? string.Empty,
+                    ImagePublicId = imageUploadResult?.PublicId ?? string.Empty,
+                    ImageFormat = imageUploadResult?.Format ?? string.Empty,
                     Category = (PostCategory)Enum.Parse(typeof(PostCategory), post.Category),
                     Author = author,
                     Content = post.Content,
@@ -73,7 +73,7 @@ namespace BloggingAPI.Services.Implementation
                 _logger.Log(LogLevel.Information, $"Newly created post: Id= {newPost.Id} - Title= {newPost.Title}. Created at: {newPost.PublishedOn.ToShortDateString()}");
 
                 // Schedule a background job to send the email notification
-                BackgroundJob.Enqueue(() => _emailNotificationService.SendNewPostNotificationAsync(newPost));
+                //BackgroundJob.Enqueue(() => _emailNotificationService.SendNewPostNotificationAsync(newPost));
 
                 var postToReturn = newPost.MapToPostOnlyDto();
                 return ApiResponse<PostOnlyDto>.Success(201, postToReturn, "Post created successfully");
