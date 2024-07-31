@@ -60,6 +60,7 @@ namespace BloggingAPI.Services.Implementation
                     LastName = userRegistrationDto.LastName,
                     SecurityStamp = Guid.NewGuid().ToString(),
                     RefreshToken = string.Empty,
+                    PhoneCountryCode = userRegistrationDto.PhoneCountryCode,
                 };
                 var result = await _userManager.CreateAsync(user, userRegistrationDto.Password);
                 if (!result.Succeeded)
