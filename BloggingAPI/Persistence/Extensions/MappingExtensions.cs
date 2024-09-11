@@ -1,5 +1,6 @@
-﻿using BloggingAPI.Contracts.Dtos.Responses;
+﻿using BloggingAPI.Contracts.Dtos.Responses.Auth;
 using BloggingAPI.Contracts.Dtos.Responses.Posts;
+using BloggingAPI.Contracts.Dtos.Responses.Tags;
 using BloggingAPI.Domain.Entities;
 
 namespace BloggingAPI.Persistence.Extensions
