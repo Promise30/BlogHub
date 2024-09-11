@@ -6,7 +6,12 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Formatters;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -15,10 +20,29 @@ namespace BloggingAPI.Persistence.Extensions
 {
     public static class ServiceExtensions
     {
+        public static class MyJPIF
+        {
+            public static NewtonsoftJsonInputFormatter GetJsonPatchInputFormatter()
+            {
+                var builder = new ServiceCollection()
+                        .AddLogging()
+                        .AddMvc()
+                        .AddNewtonsoftJson()
+                        .Services.BuildServiceProvider();
+                return builder.GetRequiredService<IOptions<MvcOptions>>()
+                        .Value
+                        .InputFormatters
+                        .OfType<NewtonsoftJsonInputFormatter>()
+                        .First();
+            }
+
+        }
         public static void ConfigureSqlContext(this IServiceCollection services,
             IConfiguration configuration) =>
             services.AddDbContext<ApplicationDbContext>(options =>
-                                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+                                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"))
+            .LogTo(Console.WriteLine, LogLevel.Information));
+            //.EnableSensitiveDataLogging());
         public static void ConfigureBloggingService(this IServiceCollection services) =>
             services.AddScoped<IBloggingService, BloggingService>();
         public static void ConfigureCors(this IServiceCollection services) =>
@@ -45,8 +69,23 @@ namespace BloggingAPI.Persistence.Extensions
                     DisableGlobalLocks = true
                 });
             });
+        public static void ConfigureUrlHelper(this IServiceCollection services)
+        {
+            services.AddScoped<IUrlHelper>(x =>
+            {
+                var actionContext = x.GetRequiredService<IActionContextAccessor>().ActionContext;
+                var factory = x.GetRequiredService<IUrlHelperFactory>();
+                return factory.GetUrlHelper(actionContext);
+            });
+        }
+        public static void ConfigureRedisCache(this IServiceCollection services, IConfiguration configuration) =>
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = configuration.GetConnectionString("RedisConn");
+                options.InstanceName = "BloggingApi_";
+            });
         public static void ConfigureIdentity(this IServiceCollection services) =>
-            services.AddIdentity<User, IdentityRole>(o =>
+            services.AddIdentity<ApplicationUser, IdentityRole>(o =>
             {
                 o.Password.RequireDigit = false;
                 o.Password.RequireLowercase = false;
