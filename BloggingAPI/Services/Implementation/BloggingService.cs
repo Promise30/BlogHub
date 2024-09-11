@@ -3,6 +3,7 @@ using BloggingAPI.Contracts.Dtos.Requests.Posts;
 using BloggingAPI.Contracts.Dtos.Requests.Tags;
 using BloggingAPI.Contracts.Dtos.Responses;
 using BloggingAPI.Contracts.Dtos.Responses.Posts;
+using BloggingAPI.Contracts.Dtos.Responses.Tags;
 using BloggingAPI.Domain.Entities;
 using BloggingAPI.Domain.Repositories;
 using BloggingAPI.Persistence.Extensions;
