@@ -5,7 +5,7 @@ namespace BloggingAPI.Persistence.Repositories.RepositoryExtensions
     public static class RepositoryCommentExtensions
     {
         public static IQueryable<Comment> FilterComments(this IQueryable<Comment> comments, DateTime startDate, DateTime endDate) => comments.Where(c => c.PublishedOn >= startDate && c.PublishedOn <= endDate);
-        public static IQueryable<Comment> Search(this IQueryable<Comment> comments, string searchTerm)
+        public static IQueryable<Comment> Search(this IQueryable<Comment> comments, string? searchTerm)
         {
             if (string.IsNullOrWhiteSpace(searchTerm))
                 return comments;
