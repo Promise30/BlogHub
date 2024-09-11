@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BloggingAPI.Migrations
 {
     /// <inheritdoc />
-    public partial class initial : Migration
+    public partial class InitialCreateAndSeedDb : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -57,6 +57,19 @@ namespace BloggingAPI.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Tags",
+                columns: table => new
+                {
+                    TagId = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Tags", x => x.TagId);
                 });
 
             migrationBuilder.CreateTable(
@@ -169,28 +182,33 @@ namespace BloggingAPI.Migrations
                 name: "BlogPosts",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
+                    PostId = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Title = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Content = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Author = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Category = table.Column<int>(type: "int", nullable: false),
+                    Author = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PublishedOn = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
                     DateModified = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
                     PostImageUrl = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ImagePublicId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ImageFormat = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false)
+                    ApplicationUserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_BlogPosts", x => x.Id);
+                    table.PrimaryKey("PK_BlogPosts", x => x.PostId);
+                    table.ForeignKey(
+                        name: "FK_BlogPosts_AspNetUsers_ApplicationUserId",
+                        column: x => x.ApplicationUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_BlogPosts_AspNetUsers_UserId",
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -212,7 +230,31 @@ namespace BloggingAPI.Migrations
                         name: "FK_PostComments_BlogPosts_PostId",
                         column: x => x.PostId,
                         principalTable: "BlogPosts",
-                        principalColumn: "Id",
+                        principalColumn: "PostId",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PostTags",
+                columns: table => new
+                {
+                    PostId = table.Column<int>(type: "int", nullable: false),
+                    TagId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PostTags", x => new { x.PostId, x.TagId });
+                    table.ForeignKey(
+                        name: "FK_PostTags_BlogPosts_PostId",
+                        column: x => x.PostId,
+                        principalTable: "BlogPosts",
+                        principalColumn: "PostId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PostTags_Tags_TagId",
+                        column: x => x.TagId,
+                        principalTable: "Tags",
+                        principalColumn: "TagId",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -223,24 +265,24 @@ namespace BloggingAPI.Migrations
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     CommentId = table.Column<int>(type: "int", nullable: false),
-                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ApplicationUserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
                     IsUpVote = table.Column<bool>(type: "bit", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_CommentVote", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_CommentVote_AspNetUsers_UserId",
-                        column: x => x.UserId,
+                        name: "FK_CommentVote_AspNetUsers_ApplicationUserId",
+                        column: x => x.ApplicationUserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_CommentVote_PostComments_CommentId",
                         column: x => x.CommentId,
                         principalTable: "PostComments",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.InsertData(
@@ -248,8 +290,8 @@ namespace BloggingAPI.Migrations
                 columns: new[] { "Id", "ConcurrencyStamp", "Name", "NormalizedName" },
                 values: new object[,]
                 {
-                    { "dceb9f70-0c93-4c73-9f9b-d5d3c492bce9", "1", "User", "USER" },
-                    { "e02e032c-2f1b-4c28-9fe4-0f8d868331f6", "2", "Administrator", "ADMINISTRATOR" }
+                    { "50275ef1-9fdb-4353-89a8-ac675bda1eac", "1", "User", "USER" },
+                    { "a41edcfe-aae9-401f-9d05-7862243a444b", "2", "Administrator", "ADMINISTRATOR" }
                 });
 
             migrationBuilder.CreateIndex(
@@ -292,9 +334,19 @@ namespace BloggingAPI.Migrations
                 filter: "[NormalizedUserName] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_BlogPosts_ApplicationUserId",
+                table: "BlogPosts",
+                column: "ApplicationUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_BlogPosts_UserId",
                 table: "BlogPosts",
                 column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CommentVote_ApplicationUserId",
+                table: "CommentVote",
+                column: "ApplicationUserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CommentVote_CommentId",
@@ -302,14 +354,14 @@ namespace BloggingAPI.Migrations
                 column: "CommentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CommentVote_UserId",
-                table: "CommentVote",
-                column: "UserId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_PostComments_PostId",
                 table: "PostComments",
                 column: "PostId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PostTags_TagId",
+                table: "PostTags",
+                column: "TagId");
         }
 
         /// <inheritdoc />
@@ -334,10 +386,16 @@ namespace BloggingAPI.Migrations
                 name: "CommentVote");
 
             migrationBuilder.DropTable(
+                name: "PostTags");
+
+            migrationBuilder.DropTable(
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
                 name: "PostComments");
+
+            migrationBuilder.DropTable(
+                name: "Tags");
 
             migrationBuilder.DropTable(
                 name: "BlogPosts");

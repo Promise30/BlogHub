@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20240731141806_initial")]
-    partial class initial
+    [Migration("20240907215832_ModifiedPostPropertiesToAllowNullsForImageRelatedProperties")]
+    partial class ModifiedPostPropertiesToAllowNullsForImageRelatedProperties
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -25,124 +25,7 @@ namespace BloggingAPI.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.Comment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Author")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateModified")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<int>("PostId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("PublishedOn")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PostId");
-
-                    b.ToTable("PostComments");
-                });
-
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CommentId")
-                        .HasColumnType("int");
-
-                    b.Property<bool?>("IsUpVote")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CommentId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("CommentVote");
-                });
-
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Author")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Category")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("DateModified")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("ImageFormat")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ImagePublicId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PostImageUrl")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("PublishedOn")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("BlogPosts");
-                });
-
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.User", b =>
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -210,7 +93,7 @@ namespace BloggingAPI.Migrations
                     b.Property<string>("RefreshToken")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("RefreshTokenExpiryDate")
+                    b.Property<DateTime?>("RefreshTokenExpiryDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("SecurityStamp")
@@ -235,6 +118,153 @@ namespace BloggingAPI.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.Comment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("DateModified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<int>("PostId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PublishedOn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PostId");
+
+                    b.ToTable("PostComments");
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("CommentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool?>("IsUpVote")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.HasIndex("CommentId");
+
+                    b.ToTable("CommentVote");
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
+                {
+                    b.Property<int>("PostId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PostId"));
+
+                    b.Property<string>("ApplicationUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Author")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("DateModified")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<string>("ImageFormat")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ImagePublicId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PostImageUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("PublishedOn")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("PostId");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("BlogPosts");
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.PostTag", b =>
+                {
+                    b.Property<int>("PostId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PostId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("PostTags");
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.Tag", b =>
+                {
+                    b.Property<int>("TagId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TagId"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("TagId");
+
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -266,14 +296,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "dceb9f70-0c93-4c73-9f9b-d5d3c492bce9",
+                            Id = "2694b465-338a-48fa-a3da-3bc4a9e7aa2c",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "e02e032c-2f1b-4c28-9fe4-0f8d868331f6",
+                            Id = "433a7542-3689-4134-9eb1-f7214ae777be",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
@@ -399,15 +429,14 @@ namespace BloggingAPI.Migrations
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
                 {
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("ApplicationUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("BloggingAPI.Domain.Entities.Comment", "Comment")
                         .WithMany("Votes")
                         .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("BloggingAPI.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -418,13 +447,35 @@ namespace BloggingAPI.Migrations
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
                 {
-                    b.HasOne("BloggingAPI.Domain.Entities.User", "User")
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", null)
                         .WithMany("Posts")
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("ApplicationUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.PostTag", b =>
+                {
+                    b.HasOne("BloggingAPI.Domain.Entities.Post", "Post")
+                        .WithMany("TagLinks")
+                        .HasForeignKey("PostId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("User");
+                    b.HasOne("BloggingAPI.Domain.Entities.Tag", "Tag")
+                        .WithMany("PostLinks")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Post");
+
+                    b.Navigation("Tag");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -438,7 +489,7 @@ namespace BloggingAPI.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
                 {
-                    b.HasOne("BloggingAPI.Domain.Entities.User", null)
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -447,7 +498,7 @@ namespace BloggingAPI.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
-                    b.HasOne("BloggingAPI.Domain.Entities.User", null)
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -462,7 +513,7 @@ namespace BloggingAPI.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("BloggingAPI.Domain.Entities.User", null)
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -471,11 +522,16 @@ namespace BloggingAPI.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
-                    b.HasOne("BloggingAPI.Domain.Entities.User", null)
+                    b.HasOne("BloggingAPI.Domain.Entities.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.ApplicationUser", b =>
+                {
+                    b.Navigation("Posts");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Comment", b =>
@@ -486,11 +542,13 @@ namespace BloggingAPI.Migrations
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
                 {
                     b.Navigation("Comment");
+
+                    b.Navigation("TagLinks");
                 });
 
-            modelBuilder.Entity("BloggingAPI.Domain.Entities.User", b =>
+            modelBuilder.Entity("BloggingAPI.Domain.Entities.Tag", b =>
                 {
-                    b.Navigation("Posts");
+                    b.Navigation("PostLinks");
                 });
 #pragma warning restore 612, 618
         }

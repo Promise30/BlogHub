@@ -4,6 +4,7 @@ using BloggingAPI.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240907194429_ModifiedPostPropertiesToAllowNulls")]
+    partial class ModifiedPostPropertiesToAllowNulls
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -150,7 +153,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("PostId");
 
-                    b.ToTable("PostComments", (string)null);
+                    b.ToTable("PostComments");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
@@ -176,7 +179,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("CommentId");
 
-                    b.ToTable("CommentVote", (string)null);
+                    b.ToTable("CommentVote");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
@@ -209,6 +212,7 @@ namespace BloggingAPI.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PostImageUrl")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("PublishedOn")
@@ -229,7 +233,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("BlogPosts", (string)null);
+                    b.ToTable("BlogPosts");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.PostTag", b =>
@@ -244,7 +248,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("TagId");
 
-                    b.ToTable("PostTags", (string)null);
+                    b.ToTable("PostTags");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Tag", b =>
@@ -261,7 +265,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasKey("TagId");
 
-                    b.ToTable("Tags", (string)null);
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -293,14 +297,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "2694b465-338a-48fa-a3da-3bc4a9e7aa2c",
+                            Id = "e32578b9-3257-48d0-994b-52135974a675",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "433a7542-3689-4134-9eb1-f7214ae777be",
+                            Id = "bf7029e3-49dd-4351-b654-4f1c8b5665bc",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
