@@ -1,5 +1,6 @@
 ﻿using BloggingAPI.Contracts.Dtos.Requests.Auth;
 using BloggingAPI.Contracts.Dtos.Responses;
+using BloggingAPI.Contracts.Dtos.Responses.Auth;
 using BloggingAPI.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
