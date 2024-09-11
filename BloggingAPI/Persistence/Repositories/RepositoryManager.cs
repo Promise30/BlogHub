@@ -8,6 +8,8 @@ namespace BloggingAPI.Persistence.Repositories
         private IPostRepository _postRepository;
         private ICommentRepository _commentRepository;
         private ICommentVoteRepository _commentVoteRepository;
+        private ITagRepository _tagRepository;
+        private IPostTagRepository _postTagRepository;
 
         public RepositoryManager(ApplicationDbContext applicationDbContext)
         {
@@ -48,7 +50,28 @@ namespace BloggingAPI.Persistence.Repositories
                 return _commentVoteRepository;
             }
         }
-
-        public Task SaveAsync() => _applicationDbContext.SaveChangesAsync();
+        public ITagRepository Tag
+        {
+            get
+            {
+                if(_tagRepository == null)
+                {
+                    _tagRepository = new TagRepository(_applicationDbContext);
+                }
+                return _tagRepository;
+            }
+        }
+        public IPostTagRepository PostTag
+        {
+            get
+            {
+                if(_postTagRepository == null)
+                {
+                    _postTagRepository = new PostTagRepository(_applicationDbContext);
+                }
+                return _postTagRepository;
+            }
+        }
+        public async Task SaveAsync() => await _applicationDbContext.SaveChangesAsync();
     }
 }

@@ -12,27 +12,23 @@ namespace BloggingAPI.Persistence.Repositories.RepositoryExtensions
 {
     public static class RepositoryPostExtensions
     {
-        // Filter by date created
-        public static IQueryable<Post> FilterPostsByDatePublished(this IQueryable<Post> posts, DateTime startDate, DateTime endDate) => posts.Where(c => c.PublishedOn >= startDate && c.PublishedOn <= endDate);
-        // Filter by category
-        public static IQueryable<Post> FilterPostsByCategory(this IQueryable<Post> posts, string category)
+        public static IQueryable<Post> FilterPostsByDatePublished(this IQueryable<Post> posts, DateTime startDate, DateTime endDate) => 
+               posts.Where(c => c.PublishedOn >= startDate && c.PublishedOn <= endDate);
+        public static IQueryable<Post> FilterPostsByTag(this IQueryable<Post> posts, string? tagName)
         {
-            if (string.IsNullOrEmpty(category))
+            if (string.IsNullOrEmpty(tagName))
                 return posts;
-
-            var categoryValue = (PostCategory)Enum.Parse(typeof(PostCategory), category, true);
-            return posts.Where(p => p.Category == categoryValue);
+            return posts.Where(p=> p.TagLinks.Any(pt=> pt.Tag.Name.ToLower() == tagName.ToLower()));
         }
-        public static IQueryable<Post> Search(this IQueryable<Post> posts, string searchTerm)
+        public static IQueryable<Post> Search(this IQueryable<Post> posts, string? searchTerm)
         {
             if (string.IsNullOrWhiteSpace(searchTerm))
                 return posts;
             var lowerCaseTerm = searchTerm.Trim().ToLower();
-            return posts.Where(p => p.Title.ToLower().Contains(lowerCaseTerm) || p.Content.Contains(searchTerm) || p.Author.ToLower().Contains(lowerCaseTerm));
-            //var fullTextQuery = EF.Functions.FreeText(posts.GetFullTextQuery("Title", "Content", "Author"), searchTerm);
-            //return posts.Where(fullTextQuery); 
+            return posts.Where(p => p.Title.ToLower().Contains(lowerCaseTerm) || p.Content.ToLower().Contains(lowerCaseTerm));
+           
         }
-        public static IQueryable<Post> Sort(this IQueryable<Post> Posts, string orderByQueryString)
+        public static IQueryable<Post> Sort(this IQueryable<Post> Posts, string? orderByQueryString)
         {
             if (string.IsNullOrWhiteSpace(orderByQueryString))
                 return Posts.OrderBy(e => e.Title);

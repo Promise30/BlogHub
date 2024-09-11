@@ -18,7 +18,10 @@ namespace BloggingAPI.Persistence.Configurations
                    .WithMany(c => c.Comment)
                    .HasForeignKey(c => c.PostId)
                    .OnDelete(DeleteBehavior.Cascade);
-
+            builder.HasMany(c => c.Votes)
+                    .WithOne(cv => cv.Comment)
+                    .HasForeignKey(cv => cv.CommentId)
+                    .OnDelete(DeleteBehavior.Cascade);
 
             builder.Property(c => c.PublishedOn)
                    .HasDefaultValueSql("GETDATE()");

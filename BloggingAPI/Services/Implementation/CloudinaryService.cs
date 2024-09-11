@@ -15,7 +15,7 @@ namespace BloggingAPI.Services.Implementation
 
             _logger = logger;
             _configuration = configuration;
-            Account account = new Account(
+            Account account = new(
                 _configuration["CloudinarySettings:CloudName"],
                 _configuration["CloudinarySettings:ApiKey"],
                 _configuration["CloudinarySettings:ApiSecret"]
@@ -42,10 +42,25 @@ namespace BloggingAPI.Services.Implementation
         }
         public async Task<DeletionResult> DeleteImageAsync(string publicId)
         {
-            var deletionParams = new DeletionParams(publicId) { ResourceType = ResourceType.Image };
-            var result = _cloudinary.Destroy(deletionParams);
-            _logger.Log(LogLevel.Information, $"Status of deletion operation: {result.JsonObj}");
-            return result;
+            try
+            {
+                var deletionParams = new DeletionParams(publicId) { ResourceType = ResourceType.Image };
+                var result = await _cloudinary.DestroyAsync(deletionParams);
+
+                //_logger.Log(LogLevel.Information, $"Status of deletion operation: {result.JsonObj}");
+                //return result;
+                if(result.Result != null)
+                {
+                    _logger.Log(LogLevel.Information, "Image with publicId {publicId} deleted successfully", publicId);
+                }
+                _logger.Log(LogLevel.Warning, $"Failed to delete image with publicId {publicId}. Deletion status: {result.Result}");
+                return result;
+            }
+            catch (Exception ex) 
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while deleting image with publicId {publicId}: {ex.Message}");
+                throw;
+            }
         }
     }
 }

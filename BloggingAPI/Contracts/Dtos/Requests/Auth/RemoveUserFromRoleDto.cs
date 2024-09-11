@@ -3,12 +3,12 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BloggingAPI.Contracts.Dtos.Requests.Auth
 {
-    public record RemoveUserFromRoleDto
-    (
+    public class RemoveUserFromRoleDto
+    {
         [Required(ErrorMessage = "Email field is required")]
         [EmailAddress(ErrorMessage = "A valid email address is required")]
-        string Email,
+        public string Email { get; set; }
         [ValidRoles(ErrorMessage = "Invalid role specified")]
-        ICollection<string> Roles
-    );
+        public ICollection<string> Roles { get; set; }
+    }
 }

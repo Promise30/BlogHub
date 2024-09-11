@@ -21,8 +21,8 @@ namespace BloggingAPI.Persistence.Repositories
             Delete(commentVote);
         }
 
-        public async Task<CommentVote> GetCommentVoteForCommentAsync(int commentId, string userId) =>
-            await FindByCondition(c => c.CommentId == commentId && c.UserId == userId).SingleOrDefaultAsync();
+        public async Task<CommentVote?> GetCommentVoteForCommentAsync(int commentId, string ApplicationUserId) =>
+            await FindByCondition(c => c.CommentId == commentId && c.ApplicationUserId == ApplicationUserId).SingleOrDefaultAsync();
 
         public void UpdateCommentVote(CommentVote commentVote)
         {

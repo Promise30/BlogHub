@@ -6,11 +6,13 @@ namespace BloggingAPI.Domain.Repositories
     public interface IPostRepository
     {
         Task<PagedList<Post>> GetAllPostsAsync(PostParameters postParameters);
+        Task<PagedList<Post>> GetAllUserPostsAsync(string ApplicationUserId, PostParameters postParameters);
         Task<Post> GetPostAsync(int id);
-        Task<Post> GetPostWithCommentsAsync(int id);
         void CreatePost(Post post);
         void DeletePost(Post post);
         void UpdatePost(Post post);
-        Task<Post> GetPostwithUserAsync(int id);
+        Task<Post> GetPostWithUserAsync(int id);
+        Task<Post> GetPostWithTagsAsync(int id);
+        bool PostExists(int id);
     }
 }

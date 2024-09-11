@@ -2,12 +2,12 @@
 
 namespace BloggingAPI.Contracts.Dtos.Requests.Auth
 {
-    public record GetNewTokenDto
+    public class GetNewTokenDto
     {
         [Required(ErrorMessage = "Access token is required")]
-        public string AccessToken { get; init; }
+        public string AccessToken { get; set; }
         [Required(ErrorMessage = "Refresh token is required")]
-        public string RefreshToken { get; init; }
+        public string RefreshToken { get; set; }
     }
 
 }

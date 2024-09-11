@@ -2,10 +2,10 @@
 {
     public class JwtConfiguration
     {
-        public string validIssuer { get; set; }
-        public string validAudience { get; set; }
-        public string secretKey { get; set; }
-        public string expires { get; set; }
+        public string validIssuer { get; set; } = null!;
+        public string validAudience { get; set; } = null!;
+        public string secretKey { get; set; } = null!;
+        public string expires { get; set; } = null!;
 
     }
 }
