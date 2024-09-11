@@ -2,12 +2,12 @@
 
 namespace BloggingAPI.Contracts.Dtos.Requests.Auth
 {
-    public record UserLoginDto
-    (
+    public class UserLoginDto
+    {
         [Required(ErrorMessage = "User name is required")]
-        string UserName,
+        public string UserName { get; set; }
         [Required(ErrorMessage = "Password field is required")]
-        string Password
-    );
+        public string Password { get; set; }
+    }
 
 }
