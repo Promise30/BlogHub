@@ -153,6 +153,9 @@ namespace BloggingAPI.Persistence.Extensions
                                     new string[]{}
                             }
                         });
+                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                options.IncludeXmlComments(xmlPath);
             });
     }
 }
