@@ -9,7 +9,7 @@ namespace BloggingAPI.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<Post> builder)
         {
-            builder.HasKey(p => p.Id); 
+            builder.HasKey(p => p.PostId); 
                    
             builder.HasMany(p => p.Comment)
                     .WithOne(p => p.Post)

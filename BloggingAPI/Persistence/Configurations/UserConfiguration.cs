@@ -5,9 +5,9 @@ using System.Reflection.Emit;
 
 namespace BloggingAPI.Persistence.Configurations
 {
-    internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
+    internal sealed class UserConfiguration : IEntityTypeConfiguration<ApplicationUser>
     {
-        public void Configure(EntityTypeBuilder<User> builder)
+        public void Configure(EntityTypeBuilder<ApplicationUser> builder)
         {
             builder.Property(u => u.FirstName)
                    .IsRequired();
@@ -26,6 +26,10 @@ namespace BloggingAPI.Persistence.Configurations
 
             builder.Property(u => u.DateModified)
                    .HasDefaultValueSql("GETDATE()");
+            builder.HasMany(u => u.Posts)
+                    .WithOne()
+                    .HasForeignKey(p => p.ApplicationUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

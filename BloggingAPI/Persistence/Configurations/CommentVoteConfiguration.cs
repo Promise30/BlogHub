@@ -9,15 +9,11 @@ namespace BloggingAPI.Persistence.Configurations
     {
         public void Configure(EntityTypeBuilder<CommentVote> builder)
         {
-            builder.HasOne(cv => cv.Comment)
-                   .WithMany(c => c.Votes)
-                   .HasForeignKey(cv => cv.CommentId)
-                   .OnDelete(DeleteBehavior.Restrict); 
-
+            builder.HasKey(cv => cv.Id);
             builder.HasOne(cv => cv.User)
                    .WithMany()
-                   .HasForeignKey(cv => cv.UserId)
-                   .OnDelete(DeleteBehavior.Cascade);
+                   .HasForeignKey(cv => cv.ApplicationUserId)
+                   .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }
