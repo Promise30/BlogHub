@@ -2,7 +2,9 @@
 
 namespace BloggingAPI.Contracts.Dtos.Requests.Comments
 {
-    public record CreateCommentDto(
-    [Required(ErrorMessage ="Content field is required")]
-    string Content);
+    public class CreateCommentDto
+    {
+        [Required(ErrorMessage = "Content field is required")]
+        public string Content { get; set; }
+     }
 }
