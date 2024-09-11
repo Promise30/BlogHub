@@ -7,6 +7,6 @@ namespace BloggingAPI.Domain.Repositories
         void AddCommentVote(CommentVote commentVote);
         void DeleteCommentVote(CommentVote commentVote);
         void UpdateCommentVote(CommentVote commentVote);
-        Task<CommentVote> GetCommentVoteForCommentAsync(int commentId, string userId);
+        Task<CommentVote?> GetCommentVoteForCommentAsync(int commentId, string ApplicationUserId);
     }
 }
