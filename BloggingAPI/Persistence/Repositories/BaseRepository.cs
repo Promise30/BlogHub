@@ -15,6 +15,10 @@ namespace BloggingAPI.Persistence.Repositories
         {
             _applicationDbContext.Set<T>().Add(entity);
         }
+        public void CreateRange(IEnumerable<T> entities)
+        {
+            _applicationDbContext.Set<T>().AddRange(entities);
+        }
 
         public void Delete(T entity)
         {

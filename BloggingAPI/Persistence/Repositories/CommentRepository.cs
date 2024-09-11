@@ -25,7 +25,7 @@ namespace BloggingAPI.Persistence.Repositories
         {
             Delete(comment);
         }
-        public async Task<Comment> GetCommentForPostAsync(int postId, int commentId)
+        public async Task<Comment?> GetCommentForPostAsync(int postId, int commentId)
         {
             return await FindByCondition(c => c.PostId == postId && c.Id == commentId)
                     .SingleOrDefaultAsync();
@@ -36,6 +36,7 @@ namespace BloggingAPI.Persistence.Repositories
             var startDateAsDateTime = commentParameters.StartDate?.ToDateTime(TimeOnly.MinValue) ?? DateTime.MinValue;
             var endDateAsDateTime = commentParameters.EndDate?.ToDateTime(TimeOnly.MaxValue) ?? DateTime.MaxValue;
             var comments = await FindByCondition(c => c.PostId == postId)
+                    .Include(c=> c.Votes)
                     .FilterComments(startDateAsDateTime, endDateAsDateTime)
                     .Search(commentParameters.SearchTerm)
                     .ToListAsync();
