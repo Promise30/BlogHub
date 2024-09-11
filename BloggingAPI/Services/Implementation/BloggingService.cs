@@ -1,20 +1,17 @@
-﻿
-using BloggingAPI.Contracts.Dtos.Requests.Comments;
+﻿using BloggingAPI.Contracts.Dtos.Requests.Comments;
 using BloggingAPI.Contracts.Dtos.Requests.Posts;
+using BloggingAPI.Contracts.Dtos.Requests.Tags;
 using BloggingAPI.Contracts.Dtos.Responses;
 using BloggingAPI.Contracts.Dtos.Responses.Posts;
 using BloggingAPI.Domain.Entities;
-using BloggingAPI.Domain.Enums;
 using BloggingAPI.Domain.Repositories;
 using BloggingAPI.Persistence.Extensions;
 using BloggingAPI.Persistence.RequestFeatures;
 using BloggingAPI.Services.Interface;
-using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Hangfire;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
-using MimeKit;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -26,80 +23,94 @@ namespace BloggingAPI.Services.Implementation
         private readonly IRepositoryManager _repositoryManager;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IEmailService _emailService;
-        private readonly IEmailNotificationService _emailNotificationService;
         private readonly ICloudinaryService _cloudinaryService;
+        private readonly IUrlHelper _urlHelper;
+        private readonly IEmailTemplateService _emailTemplateService;
+        private readonly IRedisCacheService _redisCacheService;
+        private bool _isFromCache = false;
         public BloggingService(ILogger<BloggingService> logger,
                                IRepositoryManager repositoryManager,
                                IHttpContextAccessor httpContextAccessor,
                                IEmailService emailService,
-                               IEmailNotificationService emailNotificationService,
-                               ICloudinaryService cloudinaryService)
+                               ICloudinaryService cloudinaryService,
+                               IUrlHelper urlHelper,
+                               IEmailTemplateService emailTemplateService,
+                               IRedisCacheService redisCacheService)
         {
             _logger = logger;
             _repositoryManager = repositoryManager;
             _httpContextAccessor = httpContextAccessor;
             _emailService = emailService;
-            _emailNotificationService = emailNotificationService;
             _cloudinaryService = cloudinaryService;
+            _urlHelper = urlHelper;
+            _emailTemplateService = emailTemplateService;
+            _redisCacheService = redisCacheService;
         }
-        public async Task<ApiResponse<PostOnlyDto>> CreatePostAsync(CreatePostDto post)
+        public async Task<ApiResponse<NewPostDto>> CreatePostAsync(CreatePostDto post)
         {
             try
             {
-                var userId = GetCurrentUserId();
+                var ApplicationUserId = GetCurrentApplicationUserId();
                 var author = GetCurrentUserName();
-
+                var currentUserEmail = GetCurrentUserEmail();
                 var file = post?.PostCoverImage;
                 ImageUploadResult imageUploadResult = null;
-
                 if (file != null)
                 {
-                    imageUploadResult = await _cloudinaryService.UploadImage(post.PostCoverImage);
+                    imageUploadResult = await _cloudinaryService.UploadImage(file);
                 }
+                var uniqueTags = post?.TagsId?.Distinct().ToList();
+                var tags =  _repositoryManager.Tag.GetTagsByIds(uniqueTags!);
 
                 var newPost = new Post
                 {
                     Title = post.Title,
-                    PostImageUrl = imageUploadResult?.Uri?.ToString() ?? string.Empty,
-                    ImagePublicId = imageUploadResult?.PublicId ?? string.Empty,
-                    ImageFormat = imageUploadResult?.Format ?? string.Empty,
-                    Category = (PostCategory)Enum.Parse(typeof(PostCategory), post.Category),
+                    PostImageUrl = imageUploadResult?.Url?.ToString(),
+                    ImagePublicId = imageUploadResult?.PublicId ,
+                    ImageFormat = imageUploadResult?.Format,
                     Author = author,
                     Content = post.Content,
-                    UserId = userId,
+                    ApplicationUserId = ApplicationUserId,
                 };
-                _repositoryManager.Post.CreatePost(newPost);
+               
+                var postTags = tags.Select(tag => new PostTag { Post = newPost, TagId = tag.TagId }).ToList();
+  
+                _repositoryManager.PostTag.CreatePostTag(postTags);
                 await _repositoryManager.SaveAsync();
-                _logger.Log(LogLevel.Information, $"Newly created post: Id= {newPost.Id} - Title= {newPost.Title}. Created at: {newPost.PublishedOn.ToShortDateString()}");
 
-                // Schedule a background job to send the email notification
-                //BackgroundJob.Enqueue(() => _emailNotificationService.SendNewPostNotificationAsync(newPost));
+                _logger.Log(LogLevel.Information, "Newly created post: {title}. Created at: {time}", newPost.Title, newPost.PublishedOn.ToShortDateString());
 
-                var postToReturn = newPost.MapToPostOnlyDto();
-                return ApiResponse<PostOnlyDto>.Success(201, postToReturn, "Post created successfully");
+                // Generate email content and setup a background task to handle it
+                var postLink = _urlHelper.Action("GetPost", "Blog", new { id = newPost.PostId }, _httpContextAccessor?.HttpContext?.Request.Scheme);
+                var emailContent = _emailTemplateService.GenerateNewPostNotificationEmail(newPost.Author, newPost.Title, postLink);
+                BackgroundJob.Enqueue(() => _emailService.SendEmailAsync(currentUserEmail, "New Post Notification!", emailContent));
+
+                var postToReturn = newPost.ToNewlyCreatedPost(tags);
+                return ApiResponse<NewPostDto>.Success(201, postToReturn, "Post created successfully");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while creating a new post: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Information, $"Error occured while creating a new post: {ex.Message}");
-                return ApiResponse<PostOnlyDto>.Failure(400, "Post could not be created");
+                return ApiResponse<NewPostDto>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
-
         public async Task<ApiResponse<object>> DeletePostAsync(int postId)
         {
             try
             {
-
                 var post = await GetPostFromDb(postId);
                 if (post is null)
                     return ApiResponse<object>.Failure(404, "Post does not exist.");
 
                 // check eligibility to delete a post
-                var currentUserId = GetCurrentUserId();
+                var currentApplicationUserId = GetCurrentApplicationUserId();
                 var currentUserRoles = GetCurrentUserRoles();
-                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator"))
-                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+
+                if (currentUserRoles is null || currentUserRoles is null)
+                    return ApiResponse<object>.Failure(401, "User authentication failed.");
+                if (currentApplicationUserId != post.ApplicationUserId && !currentUserRoles.Contains("Administrator"))
+                    return ApiResponse<object>.Failure(403, "You do not have the permission to perform this action");
 
                 _repositoryManager.Post.DeletePost(post);
                 await _repositoryManager.SaveAsync();
@@ -107,84 +118,130 @@ namespace BloggingAPI.Services.Implementation
                 if (!string.IsNullOrEmpty(post.PostImageUrl))
                 {
                     var publicId = post.ImagePublicId;
-                    var result = await _cloudinaryService.DeleteImageAsync(publicId);
-                    _logger.Log(LogLevel.Information, $"Result of the image deletion from cloudinary: {result.JsonObj}");
+                    var jobId = BackgroundJob.Enqueue(() =>  _cloudinaryService.DeleteImageAsync(publicId));
+                    
+                    _logger.Log(LogLevel.Information, $"Result of the image deletion job {jobId} for image {publicId}.");
                 }
-                _logger.Log(LogLevel.Information, $"Post with Id: {postId} and title {post.Title} has been successfully deleted.");
-                return ApiResponse<object>.Success(204, null);
+                _logger.Log(LogLevel.Information, "Post with {id} has been successfully deleted.", postId);
+                return ApiResponse<object>.Success(204, "Request successful");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while deleting post: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Information, $"Error occured while deleting post: {ex.Message}");
-                return ApiResponse<object>.Failure(400, "Request unsuccessful");
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
-        public async Task<ApiResponse<(IEnumerable<PostOnlyDto> posts, MetaData metaData)>> GetAllPostsAsync(PostParameters postParameters)
+        public async Task<ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>> GetAllPostsAsync(PostParameters postParameters)
         {
             try
             {
-                var postsWithMetaData = await _repositoryManager.Post.GetAllPostsAsync(postParameters);
-                _logger.Log(LogLevel.Information, $"Total posts retrieved from the database: {postsWithMetaData.Count()}");
-                var postsDto = postsWithMetaData.Select(p => p.MapToPostOnlyDto()).ToList();
-                return ApiResponse<(IEnumerable<PostOnlyDto> posts, MetaData metaData)>.Success(200, (posts: postsDto, metaData: postsWithMetaData.MetaData), "Request successful");
-            }
-            catch (Exception ex)
-            {
-                _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while retriving post: {ex.Message}");
-                return ApiResponse<(IEnumerable<PostOnlyDto> posts, MetaData metaData)>.Failure(500, "Error occured while retrieving posts.");
-            }
-        }
-        public async Task<ApiResponse<PostOnlyDto>> GetPostonlyAsync(int postId)
-        {
-            try
-            {
-                var result = await GetPostFromDb(postId);
-                if (result is null)
-                    return ApiResponse<PostOnlyDto>.Failure(404, "Post does not exist");
-                _logger.Log(LogLevel.Information, $"Post with id: {postId} and title '{result.Title}' successfully retrieved from the database as: {JsonSerializer.Serialize(result)}.");
-                var postToReturn = result.MapToPostOnlyDto();
-                return ApiResponse<PostOnlyDto>.Success(200, postToReturn, "Request successful");
-            }
-            catch (Exception ex)
-            {
-                _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while retrieving post: {ex.Message}");
-                return ApiResponse<PostOnlyDto>.Failure(500, "Request unsucessful");
-            }
-        }
-        public async Task<ApiResponse<PostWithCommentsDto>> GetPostWithCommentsAsync(int postId)
-        {
-            try
-            {
-                var post = await _repositoryManager.Post.GetPostWithCommentsAsync(postId);
-                _logger.Log(LogLevel.Information, $"Post with id: {postId} and title '{post.Title}' successfully retrieved from the database with total comments of {post.Comment.Count()}.");
-                var postToReturn = post.MapToPostDto();
-                return ApiResponse<PostWithCommentsDto>.Success(200, postToReturn, "Request successful");
-            }
-            catch (Exception ex)
-            {
-                _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while retrieving post: {ex.Message}");
-                return ApiResponse<PostWithCommentsDto>.Failure(500, "Request unsucessful");
-            }
-        }
-        private async Task<Post> GetPostFromDb(int postId) =>
-             await _repositoryManager.Post.GetPostAsync(postId);
+                var cacheKey = $"posts:{postParameters.PageNumber}:{postParameters.PageSize}:{postParameters.OrderBy}:{postParameters.SearchTerm}:{postParameters.Tag}:{postParameters.StartDate}:{postParameters.EndDate}";
+                var cachedData = _redisCacheService.GetCachedData<(List<PostDto> posts, MetaData metaData)>(cacheKey);
 
+                if (cachedData.posts == null)
+                {
+                    var postsWithMetaData = await _repositoryManager.Post.GetAllPostsAsync(postParameters);
+                    _logger.Log(LogLevel.Information, "Total posts retrieved from the database: {count}", postsWithMetaData.Count());
+
+                    // Convert to PostDto and cache only the necessary parts
+                    var postsDto = postsWithMetaData.Select(p => p.ToPostDto()).ToList();
+                    _redisCacheService.SetCachedData(cacheKey, (postsDto, postsWithMetaData.MetaData), TimeSpan.FromMinutes(3));
+
+                    return ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>.Success(200, (postsDto, postsWithMetaData.MetaData), "Request successful");
+                }
+                else
+                {
+                    _logger.Log(LogLevel.Information, "Posts were retrieved from cache");
+                    return ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>.Success(200, (cachedData.posts, cachedData.metaData), "Request successful");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving posts from the database: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<(IEnumerable<PostDto>, MetaData metaData)>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+
+        //public async Task<ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>> GetAllPostsAsync(PostParameters postParameters)
+        //{
+        //    try
+        //    {
+        //        var cacheKey = $"posts:{postParameters.PageNumber}:{postParameters.PageSize}:{postParameters.OrderBy}:{postParameters.SearchTerm}:{postParameters.Tag}:{postParameters.StartDate}:{postParameters.EndDate}";
+        //        var postsWithMetaData = _redisCacheService.GetCachedData<PagedList<Post>>(cacheKey);
+        //        if (postsWithMetaData is null)
+        //        {
+        //            postsWithMetaData = await _repositoryManager.Post.GetAllPostsAsync(postParameters);
+        //            _logger.Log(LogLevel.Information, "Total posts retrieved from the database: {count}", postsWithMetaData.Count());
+        //            _redisCacheService.SetCachedData(cacheKey, postsWithMetaData, TimeSpan.FromMinutes(3));
+        //        }
+        //        else
+        //            _logger.Log(LogLevel.Information, "Posts were retrieved from cache");
+        //        var postsDto = postsWithMetaData.Select(p=> p.ToPostDto()).ToList();
+        //        return ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>.Success(200, (posts: postsDto, metaData: postsWithMetaData.MetaData), "Request successful");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.Log(LogLevel.Error, $"Error occurred while retrieving posts from the database: {ex.Message}");
+        //        _logger.Log(LogLevel.Error, ex.StackTrace);
+        //        return ApiResponse<(IEnumerable<PostDto>, MetaData metaData)>.Failure(500, "An error occurred. Request unsuccessful.");
+        //    }
+        //}
+        public async Task<ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>> GetAllUserPostsAsync(PostParameters postParameters)
+        {
+            try
+            {
+                var ApplicationUserId = GetCurrentApplicationUserId();
+                var postsWithMetaData = await _repositoryManager.Post.GetAllUserPostsAsync(ApplicationUserId, postParameters);
+                _logger.Log(LogLevel.Information, "Total posts retrieved from the database: {count}", postsWithMetaData.Count());
+              
+                var postsDto = postsWithMetaData.Select(p => p.ToPostDto()).ToList();
+                return ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>.Success(200, (posts: postsDto, metaData: postsWithMetaData.MetaData), "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving user posts from the database: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<(IEnumerable<PostDto> posts, MetaData metaData)>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<PostDetailDto>> GetPostAsync(int postId)
+        {
+            try
+            {
+                var cacheKey = $"{GetPostCacheKey()}_{postId}";
+                var post = _redisCacheService.GetCachedData<Post>(cacheKey);
+                if (post is null)
+                {
+                    post = await GetPostFromDb(postId);
+                    if (post is null)
+                        return ApiResponse<PostDetailDto>.Failure(404, "Post not found");
+                    _logger.Log(LogLevel.Information, "Post successfully retrieved from the database");
+                    _redisCacheService.SetCachedData(cacheKey, post, TimeSpan.FromMinutes(3));
+                }
+                var postToReturn = post.ToPostDetailDto();
+                return ApiResponse<PostDetailDto>.Success(200, postToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving post from the database: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<PostDetailDto>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
         public async Task<ApiResponse<object>> VoteCommentAsync(int postId, int commentId, bool? isUpVote)
         {
             try
             {
                 _logger.Log(LogLevel.Information, $"User's vote option: {isUpVote}");
-                var currentUserId = GetCurrentUserId();
-                var existingVote = await _repositoryManager.CommentVote.GetCommentVoteForCommentAsync(commentId, currentUserId);
+                var currentApplicationUserId = GetCurrentApplicationUserId();
+                var existingVote = await _repositoryManager.CommentVote.GetCommentVoteForCommentAsync(commentId, currentApplicationUserId);
                 if (existingVote == null)
                 {
                     var newCommentVote = new CommentVote
                     {
-                        UserId = currentUserId,
+                        ApplicationUserId = currentApplicationUserId,
                         CommentId = commentId,
                         IsUpVote = isUpVote
                     };
@@ -204,9 +261,9 @@ namespace BloggingAPI.Services.Implementation
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while attempting to vote on a comment: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while voting on the comment: {ex.Message}");
-                return ApiResponse<object>.Failure(500, "Request unsucessful");
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
         public async Task<ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>> GetAllCommentsForPostAsync(int postId, CommentParameters commentParameters)
@@ -217,54 +274,44 @@ namespace BloggingAPI.Services.Implementation
                 {
                     return ApiResponse<(IEnumerable<CommentDto>, MetaData metaData)>.Failure(400, "End date cannot be less than start date");
                 }
-                var post = await GetPostFromDb(postId);
-                if (post is null)
+                var post = _repositoryManager.Post.PostExists(postId);
+                if (!post)
                     return ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>.Failure(404, "Post does not exist.");
+                //var comments = post.Comment.ToList();
                 var commentsWithMetadata = await _repositoryManager.Comment.GetCommentsForPostAsync(postId, commentParameters);
 
-                _logger.Log(LogLevel.Information, $"Total comments retrieved from the database for post '{post.Title} is: {commentsWithMetadata.Count()}");
-                var commentsDto = commentsWithMetadata.Select(c => new CommentDto
-                {
-                    Id = c.Id,
-                    Content = c.Content,
-                    Author = c.Author,
-                    PublishedOn = c.PublishedOn,
-                }).ToList();
+                _logger.Log(LogLevel.Information, "Total comments retrieved from the database for post '{id}' is: {count}", postId, commentsWithMetadata.Count());
+                
+                var commentsDto = commentsWithMetadata.Select(c => c.ToCommentDto()).ToList();
                 return ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>.Success(200, (comments: commentsDto, metaData: commentsWithMetadata.MetaData), "Request successful");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving all comments for a post from the database: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while retrieving comments: {ex.Message}");
-                return ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>.Failure(500, "Request unsucessful");
+                return ApiResponse<(IEnumerable<CommentDto> comments, MetaData metaData)>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
-
         public async Task<ApiResponse<CommentDto>> GetCommentForPostAsync(int postId, int commentId)
         {
             try
             {
-                var post = await GetPostFromDb(postId);
-                if (post == null)
+                var cacheKey = $"{GetPostCacheKey()}_{postId}_{GetCommentCacheKey()}_{commentId}";
+                var post = _repositoryManager.Post.PostExists(postId);
+                if (!post)
                     return ApiResponse<CommentDto>.Failure(404, "Post does not exist");
                 var comment = await _repositoryManager.Comment.GetCommentForPostAsync(postId, commentId);
                 if (comment is null)
                     return ApiResponse<CommentDto>.Failure(404, "Comment does not exist");
-                var commentToReturn = new CommentDto
-                {
-                    Id = comment.Id,
-                    Content = comment.Content,
-                    Author = comment.Author,
-                    PublishedOn = comment.PublishedOn
-                };
-                _logger.Log(LogLevel.Information, $"Comment with Id: {commentToReturn.Id} for Post with Id: {post.Id} successfully retrieved from the database");
+                var commentToReturn = comment.ToCommentDto();
+                _logger.Log(LogLevel.Information, $"Comment with Id: {commentToReturn.Id} for Post with Id: {postId} successfully retrieved from the database");
                 return ApiResponse<CommentDto>.Success(200, commentToReturn, "Request successful");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving a comment for a post from the database: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while retrieving comment: {ex.Message}");
-                return ApiResponse<CommentDto>.Failure(500, "Request unsucessful");
+                return ApiResponse<CommentDto>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
 
@@ -272,39 +319,29 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-
-                var post = await GetPostFromDb(postId);
-                if (post is null)
+                var post = _repositoryManager.Post.PostExists(postId);
+                if (!post)
                     return ApiResponse<CommentDto>.Failure(404, "Post does not exist");
                 var commentToCreate = new Comment
                 {
                     Content = createCommentDto.Content,
                     Author = GetCurrentUserName() ?? "Anonymous",
+                    PostId = postId,
+                   // ApplicationUserId = GetCurrentApplicationUserId() ?? string.Empty,
                 };
                 _repositoryManager.Comment.CreateCommentForPost(postId, commentToCreate);
                 await _repositoryManager.SaveAsync();
-                var commentToReturn = new CommentDto
-                {
-                    Id = commentToCreate.Id,
-                    Content = commentToCreate.Content,
-                    Author = commentToCreate.Author,
-                    PublishedOn = commentToCreate.PublishedOn
-                };
-                _logger.Log(LogLevel.Information, $"Newly created comment for post with id: {post.Id} is: {JsonSerializer.Serialize(commentToReturn)}");
-                // Schedule a background job to send the email notification
-                BackgroundJob.Enqueue(() => _emailNotificationService.SendNewCommentNotificationAsync(postId, commentToCreate));
-
+                var commentToReturn = commentToCreate.ToCommentDto();
+                _logger.Log(LogLevel.Information, "Newly created comment for post '{id}' at {time}", postId, DateTime.Now);
                 return ApiResponse<CommentDto>.Success(201, commentToReturn, "Comment created successfully");
-
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while creating a new comment for a post: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while creating comment: {ex.Message}");
-                return ApiResponse<CommentDto>.Failure(500, "Request unsucessful");
+                return ApiResponse<CommentDto>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
-
         public async Task<ApiResponse<object>> DeleteCommentForPostAsync(int postId, int commentId)
         {
             try
@@ -312,28 +349,65 @@ namespace BloggingAPI.Services.Implementation
                 var post = await GetPostFromDb(postId);
                 if (post is null)
                     return ApiResponse<object>.Failure(404, "Post does not exist");
-                var commmentToDelete = await _repositoryManager.Comment.GetCommentForPostAsync(postId, commentId);
-                if (commmentToDelete is null)
+                var commentToDelete = await _repositoryManager.Comment.GetCommentForPostAsync(postId, commentId);
+                if (commentToDelete is null)
                     return ApiResponse<object>.Failure(404, "Comment does not exist");
 
                 // check eligibility to delete comment
-                var currentUserId = GetCurrentUserId();
+                var currentApplicationUserId = GetCurrentApplicationUserId();
                 var currentUserRoles = GetCurrentUserRoles();
                 var currentUserName = GetCurrentUserName();
-                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator") && currentUserName != commmentToDelete.Author)
-                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+                if (currentApplicationUserId != post.ApplicationUserId || !currentUserRoles.Contains("Administrator") || currentUserName != commentToDelete.Author)
+                    return ApiResponse<object>.Failure(StatusCodes.Status403Forbidden, "You do not have the permission to perform this action");
 
-                _repositoryManager.Comment.DeleteComment(commmentToDelete);
+                _repositoryManager.Comment.DeleteComment(commentToDelete);
                 await _repositoryManager.SaveAsync();
-                _logger.Log(LogLevel.Information, $"Comment with Id: {commmentToDelete.Id} successfully deleted from the database");
-                return ApiResponse<object>.Success(204, null);
+                _logger.Log(LogLevel.Information, "Comment with Id: '{id}' successfully deleted from the database", commentToDelete.Id);
+                return ApiResponse<object>.Success(204, "Request successful");
             }
             catch (Exception ex)
             {
-
+                _logger.Log(LogLevel.Error, $"Error occurred while deleting a post comment: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while deleting comment: {ex.Message}");
-                return ApiResponse<object>.Failure(500, "Request unsucessful");
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<object>> UpdatePostCoverImageAsync(int postId, UpdatePostCoverImageDto updatePostCoverImageDto)
+        {
+            try
+            {
+                var postEntity = await _repositoryManager.Post.GetPostAsync(postId);
+                if (postEntity == null)
+                    return ApiResponse<object>.Failure(404, "Post not found");
+                if (!string.IsNullOrEmpty(postEntity?.PostImageUrl))
+                {
+                    var deleteResult = await _cloudinaryService.DeleteImageAsync(postEntity.ImagePublicId);
+                    if (deleteResult.Result != null)
+                    {
+                        _logger.Log(LogLevel.Warning, "Failed to delete the previous image with publicId: {0}", postEntity.ImagePublicId);
+                        return ApiResponse<object>.Failure(500, "Failed to delete the existing image");
+                    }
+                        // upload the new image to cloudinary
+                    var uploadResult = await _cloudinaryService.UploadImage(updatePostCoverImageDto.PostCoverImage);
+                    if (uploadResult == null || string.IsNullOrEmpty(uploadResult?.Url.AbsoluteUri))
+                    {
+                        _logger.Log(LogLevel.Warning, $"Image upload operation failed, result: {uploadResult?.JsonObj}");
+                        return ApiResponse<object>.Failure(500, "Image upload failed");
+                    }
+
+                    _logger.Log(LogLevel.Information, $"Result of the new image upload: {uploadResult?.JsonObj}");
+                    postEntity.PostImageUrl = uploadResult?.Url.AbsoluteUri;
+                    postEntity.ImagePublicId = uploadResult?.PublicId;
+                    postEntity.ImageFormat = uploadResult?.Format;
+                }
+                await _repositoryManager.SaveAsync();
+                return ApiResponse<object>.Success(204, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while updating post cover image: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
 
@@ -349,24 +423,24 @@ namespace BloggingAPI.Services.Implementation
                     return ApiResponse<object>.Failure(404, "Comment does not exist");
 
                 // check eligibility to delete comment
-                var currentUserId = GetCurrentUserId();
+                var currentApplicationUserId = GetCurrentApplicationUserId();
                 var currentUserRoles = GetCurrentUserRoles();
                 var currentUserName = GetCurrentUserName();
-                if (currentUserId != post.UserId && !currentUserRoles.Contains("Administrator") && currentUserName != commentEntity.Author)
-                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
+                if (currentApplicationUserId != post.ApplicationUserId || !currentUserRoles.Contains("Administrator") || currentUserName != commentEntity.Author)
+                    return ApiResponse<object>.Failure(StatusCodes.Status403Forbidden, "You do not have the permission to perform this action");
 
                 commentEntity.Content = updateCommentDto.Content;
 
                 _repositoryManager.Comment.UpdateCommentForPost(commentEntity);
                 await _repositoryManager.SaveAsync();
-                _logger.Log(LogLevel.Information, $"Newly updated comment for Post with Id: {post.Id} is: {JsonSerializer.Serialize(commentEntity)}");
-                return ApiResponse<object>.Success(204, null);
+                _logger.Log(LogLevel.Information, $"Newly updated comment for Post with Id: {post.PostId} is: {JsonSerializer.Serialize(commentEntity)}");
+                return ApiResponse<object>.Success(204, "Request successful");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while updating post comment: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while updating comment: {ex.Message}");
-                return ApiResponse<object>.Failure(500, "Request unsucessful");
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
 
@@ -374,65 +448,200 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-                var postEntity = await GetPostFromDb(postId);
+                var postEntity = await _repositoryManager.Post.GetPostWithTagsAsync(postId);
                 if (postEntity is null)
                     return ApiResponse<object>.Failure(404, "Post does not exist");
+
                 // check eligibility to update a post
-                var currentUserId = GetCurrentUserId();
+                var currentApplicationUserId = GetCurrentApplicationUserId();
                 var currentUserRoles = GetCurrentUserRoles();
-                if (currentUserId != postEntity.UserId && !currentUserRoles.Contains("Administrator"))
-                    return ApiResponse<object>.Failure(StatusCodes.Status401Unauthorized, "You do not have the permission to perform this action");
 
-                if (updatePostDto.PostCoverImage != null)
+                if (currentApplicationUserId != postEntity.ApplicationUserId || !currentUserRoles.Contains("Administrator"))
+                    return ApiResponse<object>.Failure(StatusCodes.Status403Forbidden, "You do not have the permission to perform this action");
+
+                
+                if(!string.IsNullOrWhiteSpace(updatePostDto.Title))
+                    postEntity.Title = updatePostDto.Title;
+                if(!string.IsNullOrWhiteSpace(updatePostDto.Content))   
+                    postEntity.Content = updatePostDto.Content;
+                if (updatePostDto.TagsId != null)
                 {
-                    if (!string.IsNullOrEmpty(postEntity.PostImageUrl))
+                    var uniqueNewTags = updatePostDto.TagsId.Distinct().ToList();
+                    var newTags = _repositoryManager.Tag.GetTagsByIds(uniqueNewTags);
+                    var newTagsIds =  newTags.Select(t => t.TagId).ToList();
+                    // Remove tags that are no longer associated
+                    postEntity.TagLinks = postEntity.TagLinks.Where(tl => newTagsIds.Contains(tl.TagId)).ToList();
+                   
+                    foreach(var tag in newTags)
                     {
-                        var publicId = postEntity.ImagePublicId;
-                        await _cloudinaryService.DeleteImageAsync(publicId);
+                        if(!postEntity.TagLinks.Any(tl=> tl.TagId == tag.TagId))
+                        {
+                            postEntity.TagLinks.Add(new PostTag { Post=postEntity, TagId=tag.TagId });
+                        }
                     }
-                    // upload the new image to cloudinary
-                    var uploadResult = await _cloudinaryService.UploadImage(updatePostDto.PostCoverImage);
-                    _logger.Log(LogLevel.Information, $"Result of the new image upload: {uploadResult.JsonObj}");
-                    postEntity.PostImageUrl = uploadResult.Uri.AbsoluteUri;
-                    postEntity.ImagePublicId = uploadResult.PublicId;
-                    postEntity.ImageFormat = uploadResult.Format;
                 }
-                //postEntity.Id = postId;
-                postEntity.Title = updatePostDto.Title;
-                postEntity.Content = updatePostDto.Content;
-                postEntity.Category = (PostCategory)Enum.Parse(typeof(PostCategory), updatePostDto.Category);
-
-                _logger.Log(LogLevel.Information, $"Newly updated post: {JsonSerializer.Serialize(postEntity)}");
-
-                _repositoryManager.Post.UpdatePost(postEntity);
-
+                postEntity.DateModified = DateTime.Now;
                 await _repositoryManager.SaveAsync();
-                _logger.Log(LogLevel.Information, $"Newly updated post with Id: {postEntity.Id} is: {JsonSerializer.Serialize(postEntity)}");
-                return ApiResponse<object>.Success(204, null);
-
-
+                var updatedPostDto = postEntity.ToPostDto();
+                return ApiResponse<object>.Success(200, updatedPostDto, "Post updated successfully");
             }
             catch (Exception ex)
             {
+                _logger.Log(LogLevel.Error, $"Error occurred while updating post: {ex.Message}");
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Error, $"Error occured while updating post: {ex.Message}");
-                return ApiResponse<object>.Failure(500, "Request unsucessful");
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
             }
         }
+        public async Task<ApiResponse<TagDto>> CreateTagAsync(CreateTagDto createTag)
+        {
+            try
+            {
+                var existingTag = _repositoryManager.Tag.GetTagByName(createTag.Name);
+                if (existingTag != null)
+                    return ApiResponse<TagDto>.Failure(400, "Tag already exists");
+                var tagToCreate = new Tag { Name = createTag.Name };
+                _repositoryManager.Tag.CreateTag(tagToCreate);
+                await _repositoryManager.SaveAsync();
+                // Invalidate cache
+                _redisCacheService.RemoveCache(GetTagCacheKey());
 
+                var tagToReturn = tagToCreate.ToTagDto();
+                return ApiResponse<TagDto>.Success(201, tagToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while creating post tag: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<TagDto>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<object>> UpdateTagAsync(int tagId, UpdateTagDto tagDto)
+        {
+            try
+            {
+                var tag = await _repositoryManager.Tag.GetTagAsync(tagId);
+                if (tag is null)
+                    return ApiResponse<object>.Failure(404, "Tag does not exist");
+                
+                tag.Name = tagDto.Name;
+
+                _repositoryManager.Tag.UpdateTag(tag);
+                await _repositoryManager.SaveAsync();
+
+                // Invalidate cache
+                _redisCacheService.RemoveCache(GetTagCacheKey());
+                return ApiResponse<object>.Success(204, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while updating post tag: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<object>> DeleteTagAsync(int tagId)
+        {
+            try
+            {
+                var tag = await _repositoryManager.Tag.GetTagAsync(tagId);
+                if (tag is null)
+                    return ApiResponse<object>.Failure(404, "Tag does not exist");
+
+                _repositoryManager.Tag.DeleteTag(tag);
+                await _repositoryManager.SaveAsync();
+
+                // Invalidate cache
+                _redisCacheService.RemoveCache(GetTagCacheKey());
+                return ApiResponse<object>.Success(204, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while deleting post tag: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<object>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<IEnumerable<TagDto>>> GetAllTagsAsync()
+        {
+            try
+            {
+                var cacheKey = GetTagCacheKey();
+
+                var tags = _redisCacheService.GetCachedData<IEnumerable<Tag>>(cacheKey);
+                if (tags is null)
+                {
+                    tags = await _repositoryManager.Tag.GetAllTagsAsync();
+                    _redisCacheService.SetCachedData(cacheKey, tags, TimeSpan.FromMinutes(3));
+                    _logger.Log(LogLevel.Information, "Tags from database");
+                }
+                else
+                {
+                    _logger.Log(LogLevel.Information, "Tags from cache");
+                }
+                var tagsToReturn = tags.Select(t => t.ToTagDto()).ToList();
+                return ApiResponse<IEnumerable<TagDto>>.Success(200, tagsToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving all post tags from the database: {ex.Message}");
+               // _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<IEnumerable<TagDto>>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<TagDto>> GetTagByIdAsync(int tagId)
+        {
+            try
+            {
+                var cacheKey = $"Blog_Cache_Tags_{tagId}";
+                var tag = _redisCacheService.GetCachedData<Tag>(cacheKey);
+                if(tag is null)
+                {
+                   tag = await _repositoryManager.Tag.GetTagAsync(tagId);
+                    if (tag is null)
+                        return ApiResponse<TagDto>.Success(404, "Tag does not exist");
+                    _redisCacheService.SetCachedData(cacheKey, tag, TimeSpan.FromMinutes(3));
+                }
+                
+                var tagToReturn = tag.ToTagDto();
+                return ApiResponse<TagDto>.Success(200, tagToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving post tag from the database: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<TagDto>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
+        public async Task<ApiResponse<IEnumerable<PostDetailDto>>> GetAllPostsForTagAsync(int tagId)
+        {
+            try
+            {
+                var tag = await _repositoryManager.Tag.GetTagAsync(tagId);
+                if (tag is null)
+                    return ApiResponse<IEnumerable<PostDetailDto>>.Failure(404, "Tag does not exist");
+                var posts = await _repositoryManager.Tag.GetAllPostsForTagAsync(tagId);
+                var postsToReturn = posts.Select(p=> p.ToPostDetailDto()).ToList();
+                return ApiResponse<IEnumerable<PostDetailDto>>.Success(200, postsToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, $"Error occurred while retrieving all posts for a tag from the database: {ex.Message}");
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                return ApiResponse<IEnumerable<PostDetailDto>>.Failure(500, "An error occurred. Request unsuccessful.");
+            }
+        }
         #region Private methods
-        private string GetCurrentUserName()
+        private string? GetCurrentUserName()
         {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Name)?.Value;
+            return _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.Name)?.Value;
         }
-        private string GetCurrentUserId()
+        private string? GetCurrentApplicationUserId()
         {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
-
-        private string GetCurrentUserEmail()
+        private string? GetCurrentUserEmail()
         {
-            return _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.Email)?.Value;
+            return _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.Email)?.Value;
         }
         private IEnumerable<string> GetCurrentUserRoles()
         {
@@ -440,8 +649,10 @@ namespace BloggingAPI.Services.Implementation
                 .Where(c => c.Type == ClaimTypes.Role)
                 .Select(c => c.Value);
         }
-
-
+        private async Task<Post> GetPostFromDb(int postId) => await _repositoryManager.Post.GetPostAsync(postId);
+        private string GetTagCacheKey() => "Blog_Cache_Tags";
+        private string GetPostCacheKey() => "Blog_Cache_Posts";
+        private string GetCommentCacheKey() => "Blog_Cache_Comments";
         #endregion
     }
 }

@@ -4,16 +4,11 @@ using BloggingAPI.Contracts.Dtos.Responses;
 using BloggingAPI.Domain.Entities;
 using BloggingAPI.Persistence.Extensions;
 using BloggingAPI.Services.Interface;
-using CloudinaryDotNet;
 using Hangfire;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Linq.Dynamic.Core.Tokenizer;
-using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,22 +19,28 @@ namespace BloggingAPI.Services.Implementation
     public class AuthenticationService : IAuthenticationService
     {
         private readonly ILogger<AuthenticationService> _logger;
-        private readonly UserManager<User> _userManager;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IUrlHelper _urlHelper;
-        private readonly IEmailNotificationService _emailNotificationService;
         private readonly IEmailService _emailService;
-        private User _user;
-        public AuthenticationService(ILogger<AuthenticationService> logger, UserManager<User> userManager, IConfiguration configuration, IHttpContextAccessor httpContextAccessor, IUrlHelper urlHelper, IEmailNotificationService emailNotificationService, IEmailService emailService)
+        private readonly IEmailTemplateService _emailTemplateService;
+        private ApplicationUser? _user;
+        public AuthenticationService(ILogger<AuthenticationService> logger,
+                                     UserManager<ApplicationUser> userManager,
+                                     IConfiguration configuration,
+                                     IHttpContextAccessor httpContextAccessor,
+                                     IUrlHelper urlHelper,
+                                     IEmailService emailService,
+                                     IEmailTemplateService emailTemplateService)
         {
             _logger = logger;
             _userManager = userManager;
             _configuration = configuration;
             _httpContextAccessor = httpContextAccessor;
             _urlHelper = urlHelper;
-            _emailNotificationService = emailNotificationService;
             _emailService = emailService;
+            _emailTemplateService = emailTemplateService;
         }
         public async Task<ApiResponse<object>> RegisterUser(UserRegistrationDto userRegistrationDto)
         {
@@ -51,7 +52,7 @@ namespace BloggingAPI.Services.Implementation
                     _logger.Log(LogLevel.Information, $"Existing user found when trying to register new user with email: {userRegistrationDto.Email} at {DateTime.Now.ToString("yy-MM-dd:H m s")}");
                     return ApiResponse<object>.Failure(400, "User already exists.");
                 }
-                var user = new User
+                var user = new ApplicationUser
                 {
                     UserName = userRegistrationDto.UserName,
                     Email = userRegistrationDto.Email,
@@ -65,26 +66,22 @@ namespace BloggingAPI.Services.Implementation
                 var result = await _userManager.CreateAsync(user, userRegistrationDto.Password);
                 if (!result.Succeeded)
                 {
-
                     var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
                     var errorString = string.Join("; ", errors);
                     _logger.Log(LogLevel.Information, $"Error occured while creating new user {userRegistrationDto.Email}: {errorString}");
                     return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
                 }
-
                 _logger.Log(LogLevel.Information, $"New user created with username-> {user.UserName} and id -> {user.Id} at {user.DateCreated}");
                 await _userManager.AddToRolesAsync(user, userRegistrationDto.Roles);
+                var userToReturn = user.MapToUserResponseDto();
 
-                var userToReturn = user.MapToUserResponseDto(userRegistrationDto.Roles);
-
-                // Schedule a background task to send email confirmation link
+                // Generate email content and setup a background task to handle it
                 var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var confirmationLink = _urlHelper.Action("ConfirmEmail", "Authentication", new { email = user.Email, token }, _httpContextAccessor?.HttpContext?.Request.Scheme);
+                var emailContent = _emailTemplateService.GenerateRegistrationConfirmationEmail(userRegistrationDto.UserName, confirmationLink);
 
-                // Generate confirmation link
-                var confirmationLink = _urlHelper.Action("ConfirmEmail", "Authentication", new { email = user.Email, token }, _httpContextAccessor.HttpContext.Request.Scheme);
-
-                BackgroundJob.Enqueue(() => _emailNotificationService.SendEmailConfirmationLinkAsync(confirmationLink, user.Email));
-
+                // Enqueue email sending
+                BackgroundJob.Enqueue(() => _emailService.SendEmailAsync(user.Email, "Confirm your email", emailContent));
                 return ApiResponse<object>.Success(200, userToReturn, "Registration Successful");
             }
             catch (Exception ex)
@@ -94,13 +91,11 @@ namespace BloggingAPI.Services.Implementation
                 return ApiResponse<object>.Failure(500, "User could not be created");
             }
         }
-
         public async Task<ApiResponse<TokenDto>> ValidateUser(UserLoginDto userLoginDto)
         {
             try
             {
                 _user = await _userManager.FindByNameAsync(userLoginDto.UserName);
-
                 var result = _user != null && await _userManager.CheckPasswordAsync(_user, userLoginDto.Password);
                 if (!result)
                 {
@@ -116,11 +111,8 @@ namespace BloggingAPI.Services.Implementation
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.LogInformation($"Error occured while validating user credentials: {ex.Message}");
                 return ApiResponse<TokenDto>.Failure(500, "User authentication failed.");
-
             }
         }
-
-
         public async Task<ApiResponse<TokenDto>> RefreshToken(GetNewTokenDto tokenDto)
         {
             try
@@ -150,18 +142,14 @@ namespace BloggingAPI.Services.Implementation
                     return ApiResponse<string>.Success(400, null, "Request unsuccessful");
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-                // Generate confirmation link
+                // Generate email content and setup a background task to handle it
+                var forgotPasswordLink = _urlHelper.Action("ResetUserPassword", "Authentication", new { email = user.Email, token }, _httpContextAccessor?.HttpContext?.Request.Scheme);
+                var emailContent = _emailTemplateService.GeneratePasswordResetEmail(user.UserName, forgotPasswordLink);
+                BackgroundJob.Enqueue(() => _emailService.SendEmailAsync(forgotPasswordDto.Email, "Reset your password", emailContent));
 
-                var resetPasswordLink = _urlHelper.Action("ResetPassword", "Authentication", new { email = user.Email, token }, _httpContextAccessor.HttpContext.Request.Scheme);
-                _logger.Log(LogLevel.Information, $"Password reset token generated for {user.UserName} -> {token}");
-
-
-                // Schedule a background job to send the mail
-                BackgroundJob.Enqueue(() => _emailNotificationService.SendResetPasswordPasswordEmailAsync(resetPasswordLink, user.Email));
+                _logger.Log(LogLevel.Information, "Password reset token generated for {userEmail} at {time}: {token}", user.Email, DateTime.Now, token);
 
                 return ApiResponse<string>.Success(200, token, null);
-
-
             }
             catch (Exception ex)
             {
@@ -172,28 +160,34 @@ namespace BloggingAPI.Services.Implementation
         }
         public async Task<ApiResponse<object>> PasswordResetAsync(PasswordResetDto passwordResetDto)
         {
-            try
-            {
-                _user = await _userManager.FindByEmailAsync(passwordResetDto.Email);
-                if (_user is null)
-                    return ApiResponse<object>.Failure(404, null, "User does not exist");
-                var resetPasswordResult = await _userManager.ResetPasswordAsync(_user, passwordResetDto.Token, passwordResetDto.Password);
-                if (!resetPasswordResult.Succeeded)
+            
+                try
                 {
-                    _logger.Log(LogLevel.Information, $"Error occured while trying to reset password for {_user.UserName}: {resetPasswordResult.Errors}");
-                    return ApiResponse<object>.Failure(400, resetPasswordResult.Errors.ToList(), "Request unsuccessful.");
+                    var user = await _userManager.FindByEmailAsync(passwordResetDto.Email);
+                    if (user is null)
+                        return ApiResponse<object>.Failure(404, "User does not exist");
+                    var resetPasswordResult = await _userManager.ResetPasswordAsync(user, passwordResetDto.Token, passwordResetDto.Password);
+                    if (!resetPasswordResult.Succeeded)
+                    {
+                        var errorMessages = resetPasswordResult.Errors.Select(e => e.Description).ToList();
+                        _logger.Log(LogLevel.Information, "Error occurred while trying to reset password for {userEmail}: {errors}", user.Email, errorMessages);
+                        return ApiResponse<object>.Failure(400, null, "Request unsuccessful.", errors: errorMessages);
+                    }
+                    // Invalidate refresh token
+                    user.RefreshToken = null;
+                    user.RefreshTokenExpiryDate = null;
+                    await _userManager.UpdateAsync(user);
+                    _logger.Log(LogLevel.Information, "Password successfully reset at {time} for {userEmail}", DateTime.Now, user.Email);
+                    return ApiResponse<object>.Success(200, null, "Password successfully changed.");
                 }
-
-                _logger.Log(LogLevel.Information, $"Password successfully reset at {DateTime.Now} for {_user.UserName}");
-                return ApiResponse<object>.Success(200, null, "Password successfully changed.");
-            }
-            catch (Exception ex)
-            {
-                _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.LogInformation($"Error occured while trying to reset the password: {ex.Message}");
-                return ApiResponse<object>.Failure(500, "Request unsuccessful");
-            }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogLevel.Error, ex.StackTrace);
+                    _logger.LogInformation($"Error occured while trying to reset the password: {ex.Message}");
+                    return ApiResponse<object>.Failure(500, "Request unsuccessful");
+                }
         }
+        
         public async Task<ApiResponse<object>> UserEmailConfirmation(string token, string email)
         {
             try
@@ -244,36 +238,75 @@ namespace BloggingAPI.Services.Implementation
                 return ApiResponse<object>.Failure(400, "User could not be deleted.");
             }
         }
-        public async Task<ApiResponse<IEnumerable<object>>> GetUsers()
+        public async Task<ApiResponse<IEnumerable<UserResponseDto>>> GetUsers()
         {
             try
             {
                 var users = _userManager.Users;
+                var usersToReturn = users.Select(u => new UserResponseDto
+                {
+                    Id = u.Id,
+                    FirstName = u.FirstName,
+                    LastName = u.LastName,
+                    UserName = u.UserName,
+                    PhoneCountryCode = u.PhoneCountryCode,
+                    PhoneNumber = u.PhoneNumber,
+                    Email = u.Email,
+                    DateCreated = u.DateCreated,
+                    DateModified = u.DateModified
+                }).ToList();
                 _logger.Log(LogLevel.Information, $"Total number of users retrieved from the database: {users.Count()}");
-                return ApiResponse<IEnumerable<object>>.Success(200, users, "Request successful");
+                return ApiResponse<IEnumerable<UserResponseDto>>.Success(200, usersToReturn, "Request successful");
             }
             catch (Exception ex)
             {
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.Log(LogLevel.Information, ex.Message);
-                return ApiResponse<IEnumerable<object>>.Failure(500, "Error occured while retrieving users from the database.");
+                return ApiResponse<IEnumerable<UserResponseDto>>.Failure(500, "Error occured while retrieving users from the database.");
+            }
+        }
+        public async Task<ApiResponse<IEnumerable<UserResponseDto>>> GetUsersByRoleAsync(string roleName)
+        {
+            try
+            {
+                var users = await _userManager.GetUsersInRoleAsync(roleName);
+                var usersToReturn = users.Select(u => u.MapToUserResponseDto()).ToList();
+                _logger.Log(LogLevel.Information, $"Total number of users with the role {roleName} retrieved: {users.Count()}");
+                return ApiResponse<IEnumerable<UserResponseDto>>.Success(200, usersToReturn, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, ex.Message);
+                return ApiResponse<IEnumerable<UserResponseDto>>.Failure(500, "Error occured while retrieving users from the database.");
             }
         }
         public async Task<ApiResponse<object>> AddUserToRoleAsync(AddUserToRoleDto addUserToRoleDto)
         {
             try
             {
-                _user = await _userManager.FindByEmailAsync(addUserToRoleDto.Email);
-                if (_user == null)
+                var user = await _userManager.FindByEmailAsync(addUserToRoleDto.Email);
+                if (user == null)
                     return ApiResponse<object>.Failure(400, "User does not exist");
-                var result = await _userManager.AddToRolesAsync(_user, addUserToRoleDto.Roles.ToList());
+
+                // Get the roles the user currently has
+                var currentRoles = await _userManager.GetRolesAsync(user);
+
+                // Identify roles that need to be added
+                var rolesToAdd = addUserToRoleDto.Roles.Except(currentRoles).ToList();
+
+                if (!rolesToAdd.Any())
+                    return ApiResponse<object>.Success(200, "User already has the specified role");
+
+                // Add the new roles to the user
+                var result = await _userManager.AddToRolesAsync(user, rolesToAdd);
                 if (!result.Succeeded)
                 {
-                    _logger.Log(LogLevel.Information, $"Error occured while adding roles to user: {result.Errors.ToList()}");
-                    return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, x.Description }), "Request unsuccesful");
+                    var errorMessage = result.Errors.Select(e => e.Description).ToList();
+                    _logger.Log(LogLevel.Information, "Error occurred while adding roles to user: {errors}", errorMessage.ToList());
+                    return ApiResponse<object>.Failure(400, "Request unsuccessful");
                 }
-
-                return ApiResponse<object>.Success(204, null);
+                return ApiResponse<object>.Success(200, "Request successful");
             }
             catch (Exception ex)
             {
@@ -309,7 +342,6 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-
                 _user = await _userManager.FindByEmailAsync(email);
                 if (_user == null)
                     return ApiResponse<IEnumerable<string>>.Failure(400, "User does not exist");
@@ -323,6 +355,163 @@ namespace BloggingAPI.Services.Implementation
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.Log(LogLevel.Information, $"Error occured while retrieving user roles: {ex.Message}");
                 return ApiResponse<IEnumerable<string>>.Failure(400, "Request unsuccesful");
+            }
+        }
+        public async Task<ApiResponse<(UpdateUserDto userToPatch, ApplicationUser userEntity)>> GetUserForPatchAsync()
+        {
+            try
+            {
+                var ApplicationUserId = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userEntity = await _userManager.FindByIdAsync(ApplicationUserId);
+                if (userEntity is null)
+                    return ApiResponse<(UpdateUserDto userToPatch, ApplicationUser userEntity)>.Failure(404, "User does not exist");
+                var userToPatch = new UpdateUserDto
+                {
+                    FirstName = userEntity.FirstName,
+                    LastName = userEntity.LastName,
+                    PhoneCountryCode = userEntity.PhoneCountryCode,
+                    PhoneNumber = userEntity.PhoneNumber,
+                };
+                return ApiResponse<(UpdateUserDto userToPatch, ApplicationUser userEntity)>.Success(200, (userToPatch, userEntity), "Success");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, $"Error occured while trying to update user details: {ex.Message}");
+                return ApiResponse<(UpdateUserDto userToPatch, ApplicationUser userEntity)>.Failure(400, "Request unsuccesful");
+            }
+        }
+
+        public async Task<ApiResponse<object>> SaveChangesForPatch(UpdateUserDto userToPatch, ApplicationUser userEntity)
+        {
+            userEntity.FirstName = userToPatch.FirstName;
+            userEntity.LastName = userToPatch.LastName;
+            userEntity.PhoneCountryCode = userToPatch.PhoneCountryCode;
+            userEntity.PhoneNumber = userToPatch.PhoneNumber;
+            userEntity.DateModified = DateTime.UtcNow;
+
+            IdentityResult result = await _userManager.UpdateAsync(userEntity);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
+                var errorString = string.Join("; ", errors);
+                _logger.Log(LogLevel.Information, $"Error occured while updating user details {userEntity.Email}: {errorString}");
+                return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
+            }
+            return ApiResponse<object>.Success(204, null);
+        }
+        public async Task<ApiResponse<object>> ChangeUserPasswordAsync(ChangePasswordDto changePasswordDto)
+        {
+            try
+            {
+                var ApplicationUserId = _httpContextAccessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _user = await _userManager.FindByIdAsync(ApplicationUserId);
+                if (_user is null)
+                    return ApiResponse<object>.Failure(404, "User does not exist");
+                var result = await _userManager.ChangePasswordAsync(_user, changePasswordDto.CurrentPassword, changePasswordDto.NewPassword);
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
+                    var errorString = string.Join("; ", errors);
+                    _logger.Log(LogLevel.Information, $"Error occured while changing user password {_user.Email}: {errorString}");
+                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
+                }
+                return ApiResponse<object>.Success(204, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, $"Error occured while changing user password: {ex.Message}");
+                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+
+            }
+        }
+        public async Task<ApiResponse<object>> ChangeUserEmailAsync(ChangeEmailDto changeEmailDto)
+        {
+            try
+            {
+                var ApplicationUserId = _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                _user = await _userManager.FindByIdAsync(ApplicationUserId);
+                if (_user is null)
+                    return ApiResponse<object>.Failure(404, "User does not exist");
+                if (_user.Email == changeEmailDto.NewEmail)
+                    return ApiResponse<object>.Failure(400, "New email is the same as the current email");
+                var token = await _userManager.GenerateChangeEmailTokenAsync(_user, changeEmailDto.NewEmail);
+                _logger.Log(LogLevel.Information, $"New email confirmation token for {_user.Email}: {token}");
+
+                var emailChangeConfirmationLink = _urlHelper.Action("ConfirmUserEmailChange", "Authentication", new { oldEmail = _user.Email, newEmail= changeEmailDto.NewEmail, token }, _httpContextAccessor?.HttpContext?.Request.Scheme);
+                var emailContent = _emailTemplateService.GenerateEmailChangeConfirmationLink(_user.UserName, emailChangeConfirmationLink);
+                BackgroundJob.Enqueue(() => _emailService.SendEmailAsync(changeEmailDto.NewEmail, "Confirm your new email", emailContent));
+
+                return ApiResponse<object>.Success(200, token, "Request successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, $"Error occured while changing user password: {ex.Message}");
+                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+
+            }
+        }
+        public async Task<ApiResponse<object>> NewUserEmailConfirmation(string token, string oldEmail, string newEmail)
+        {
+            try
+            {
+                _user = await _userManager.FindByIdAsync(oldEmail);
+                if (_user is null)
+                {
+                    return ApiResponse<object>.Failure(404, null, "User does not exist");
+                }
+                var result = await _userManager.ChangeEmailAsync(_user, newEmail, token);
+                if (result.Succeeded)
+                {
+                    _logger.Log(LogLevel.Information, $"Email confirmation successful for {_user.UserName} at {DateTime.Now}");
+                    return ApiResponse<object>.Success(200, "New User email verification successful");
+                }
+                return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, x.Description }), "User email verification failed.");
+
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.LogInformation($"Error occured while trying to confirm new user email: {ex.Message}");
+                return ApiResponse<object>.Failure(500, "Request unsuccessful");
+            }
+        }
+        public async Task<ApiResponse<object>> UpdateUserProfileDto(UpdateUserDto updateUserDto)
+        {
+            try
+            {
+                var ApplicationUserId = _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userEntity = await _userManager.FindByIdAsync(ApplicationUserId);
+                if (userEntity is null)
+                    return ApiResponse<object>.Failure(404, "User does not exist");
+
+                if (userEntity.FirstName != null)
+                    userEntity.FirstName = updateUserDto.FirstName;
+                if (userEntity.LastName != null)
+                    userEntity.LastName = updateUserDto.LastName;
+                if (userEntity.PhoneCountryCode != null)
+                    userEntity.PhoneCountryCode = updateUserDto.PhoneCountryCode;
+                if (userEntity.PhoneNumber != null)
+                    userEntity.PhoneNumber = updateUserDto.PhoneNumber;
+                userEntity.DateModified = DateTime.UtcNow;
+
+                IdentityResult result = await _userManager.UpdateAsync(userEntity);
+                if (!result.Succeeded)
+                {
+                    var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
+                    var errorString = string.Join("; ", errors);
+                    _logger.Log(LogLevel.Information, $"Error occured while updating user details {userEntity.Email}: {errorString}");
+                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
+                }
+                return ApiResponse<object>.Success(204, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log(LogLevel.Error, ex.StackTrace);
+                _logger.Log(LogLevel.Information, $"Error occured while trying to update user details: {ex.Message}");
+                return ApiResponse<object>.Failure(400, "Request unsuccesful");
             }
         }
 
@@ -359,6 +548,7 @@ namespace BloggingAPI.Services.Implementation
              {
              new Claim(ClaimTypes.Name, _user.UserName),
              new Claim(ClaimTypes.NameIdentifier, _user.Id),
+             new Claim(ClaimTypes.Email, _user.Email),
              };
             var roles = await _userManager.GetRolesAsync(_user);
             foreach (var role in roles)
@@ -413,15 +603,6 @@ namespace BloggingAPI.Services.Implementation
             }
             return principal;
         }
-
-
-        //private async Task<string> GetEmailConfirmationLink(User user)
-        //{
-
-        //    var confirmationLink = _urlHelper.Action("ConfirmEmail", "Authentication", new { email = user.Email, token = token }, _httpContextAccessor.HttpContext.Request.Scheme);
-
-        //}
         #endregion
     }
-
 }
