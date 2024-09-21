@@ -150,7 +150,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("PostId");
 
-                    b.ToTable("PostComments", (string)null);
+                    b.ToTable("PostComments");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.CommentVote", b =>
@@ -176,7 +176,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("CommentId");
 
-                    b.ToTable("CommentVote", (string)null);
+                    b.ToTable("CommentVote");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Post", b =>
@@ -229,7 +229,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("BlogPosts", (string)null);
+                    b.ToTable("BlogPosts");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.PostTag", b =>
@@ -244,7 +244,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasIndex("TagId");
 
-                    b.ToTable("PostTags", (string)null);
+                    b.ToTable("PostTags");
                 });
 
             modelBuilder.Entity("BloggingAPI.Domain.Entities.Tag", b =>
@@ -261,7 +261,7 @@ namespace BloggingAPI.Migrations
 
                     b.HasKey("TagId");
 
-                    b.ToTable("Tags", (string)null);
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -293,14 +293,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "2694b465-338a-48fa-a3da-3bc4a9e7aa2c",
+                            Id = "3f0f7f79-a8d5-40c4-a69b-d6ebed17efa6",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "433a7542-3689-4134-9eb1-f7214ae777be",
+                            Id = "ea79f62c-c15b-413b-a7af-b3796e2079bd",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"

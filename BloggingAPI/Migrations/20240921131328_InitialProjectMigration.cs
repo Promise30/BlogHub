@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BloggingAPI.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreateAndSeedDb : Migration
+    public partial class InitialProjectMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -36,7 +36,7 @@ namespace BloggingAPI.Migrations
                     LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     PhoneCountryCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     RefreshToken = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    RefreshTokenExpiryDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    RefreshTokenExpiryDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     DateCreated = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
                     DateModified = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
                     UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
@@ -189,7 +189,7 @@ namespace BloggingAPI.Migrations
                     Author = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PublishedOn = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
                     DateModified = table.Column<DateTime>(type: "datetime2", nullable: false, defaultValueSql: "GETDATE()"),
-                    PostImageUrl = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PostImageUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ImagePublicId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ImageFormat = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ApplicationUserId = table.Column<string>(type: "nvarchar(450)", nullable: true),
@@ -290,8 +290,8 @@ namespace BloggingAPI.Migrations
                 columns: new[] { "Id", "ConcurrencyStamp", "Name", "NormalizedName" },
                 values: new object[,]
                 {
-                    { "50275ef1-9fdb-4353-89a8-ac675bda1eac", "1", "User", "USER" },
-                    { "a41edcfe-aae9-401f-9d05-7862243a444b", "2", "Administrator", "ADMINISTRATOR" }
+                    { "3f0f7f79-a8d5-40c4-a69b-d6ebed17efa6", "1", "User", "USER" },
+                    { "ea79f62c-c15b-413b-a7af-b3796e2079bd", "2", "Administrator", "ADMINISTRATOR" }
                 });
 
             migrationBuilder.CreateIndex(

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BloggingAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20240907215832_ModifiedPostPropertiesToAllowNullsForImageRelatedProperties")]
-    partial class ModifiedPostPropertiesToAllowNullsForImageRelatedProperties
+    [Migration("20240921131328_InitialProjectMigration")]
+    partial class InitialProjectMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -296,14 +296,14 @@ namespace BloggingAPI.Migrations
                     b.HasData(
                         new
                         {
-                            Id = "2694b465-338a-48fa-a3da-3bc4a9e7aa2c",
+                            Id = "3f0f7f79-a8d5-40c4-a69b-d6ebed17efa6",
                             ConcurrencyStamp = "1",
                             Name = "User",
                             NormalizedName = "USER"
                         },
                         new
                         {
-                            Id = "433a7542-3689-4134-9eb1-f7214ae777be",
+                            Id = "ea79f62c-c15b-413b-a7af-b3796e2079bd",
                             ConcurrencyStamp = "2",
                             Name = "Administrator",
                             NormalizedName = "ADMINISTRATOR"
