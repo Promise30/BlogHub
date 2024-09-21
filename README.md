@@ -45,4 +45,4 @@ This Blog API project is a robust backend solution for managing a blogging platf
    ```
    docker-compose up
    ```
-<i>This will start both the API, the SQL Server database and the redis cache. The API will be available at <b>http://localhost:8002/swagger</b> OR <b>https://localhost:8003/swagger</b></i>
+<i>This will start the API, the SQL Server database and the redis cache. The API will be available at <b>http://localhost:8002/swagger</b> OR <b>https://localhost:8003/swagger</b></i>
