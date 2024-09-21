@@ -1,5 +1,7 @@
-# BloggingPlatformAPI
-This project is a blogging platform API built with C# and .NET, inspired by popular blogging sites like Hashnode. It provides a comprehensive set of functionalities for user authentication, account management, and CRUD operations for posts and comments.
+# Blog API Project
+
+## Overview
+This Blog API project is a robust backend solution for managing a blogging platform. Built with ASP.NET Core, it provides a RESTful API for creating, reading, updating, and deleting blog posts, managing users, and handling comments and post tags. It also provides a comprehensive set of functionalities for user authentication and account management. The project uses SQL Server for data persistence and Redis for caching, all containerized with Docker for easy deployment and scalability.
 
 ## Features
 <ul>
@@ -7,6 +9,7 @@ This project is a blogging platform API built with C# and .NET, inspired by popu
   <li>Account Management: Users can create, update, and manage their accounts.</li>
   <li>Posts CRUD Operations: Endpoints for creating, reading, updating, and deleting blog posts.</li>
   <li>Comments CRUD Operations: Endpoints for adding, updating, and deleting comments on posts.</li>
+  <li>Tags CRUD Operations: Endpoints for creating, reading, updating and deleting tags.</li>
   <li>Image Upload: Integration with Cloudinary for image uploads.</li>
   <li>Mailing System: Gmail service integration for sending emails (e.g., account verification, password reset, new post and comment notification).</li>
 </ul>
@@ -30,30 +33,16 @@ This project is a blogging platform API built with C# and .NET, inspired by popu
 
 ## Installation
 1. Clone the repository
-2. Set up the database:
-    - Create a new database in SQL Server.
-    - Update the connection string in appsettings.json:
-      <code>
-          "ConnectionStrings": {
-          "DefaultConnection": "Server=your_server_name;Database=your_database_name;User Id=your_user_id;Password=your_password;"
-          }
-      </code>
-3. Configure Cloudinary:
-    - Add your Cloudinary credentials to appsettings.json:
-    <code>
-    "Cloudinary": {
-        "CloudName": "your_cloud_name",
-        "ApiKey": "your_api_key",
-        "ApiSecret": "your_api_secret"
-    }
-    </code>
-4. Configure Gmail Service:
-    - Add your Gmail credentials to appsettings.json:
-    <code>
-    "Gmail": {
-        "Email": "your_email@gmail.com",
-        "Password": "your_email_password"
-    }
-    </code>
-5. Run the application:
-    <code>dotnet run</code>
+   ```
+   https://github.com/Promise30/BlogApiService.git
+   cd BlogApiService
+   ```
+2. Set up the project environment variables. Copy the .env.example file to a new file named .env and provide your own values:
+   ```
+   cp .env.example .env
+   ```
+3. Run the project
+  ```
+  docker-compose up
+  ```
+
