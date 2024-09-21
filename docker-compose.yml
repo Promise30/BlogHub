@@ -21,7 +21,7 @@ services:
         - blog_backend 
   bloggingapi:
     container_name: blogging-api
-    image: ${DOCKER_REGISTRY-}bloggingapi
+    image: promisea/bloggingapi:v1.0
     pull_policy: always
     build:
       context: .
