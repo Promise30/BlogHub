@@ -56,6 +56,7 @@ namespace BloggingAPI.Persistence.Extensions
                 PostImageUrl = post.PostImageUrl,
                 Tags = post.TagLinks.Select(t => t.Tag.Name).ToList(),
                 PublishedOn = post.PublishedOn,
+                
         
             };
         }

@@ -37,6 +37,7 @@ namespace BloggingAPI.Persistence.Extensions
             }
 
         }
+
         public static void ConfigureSqlContext(this IServiceCollection services,
             IConfiguration configuration) =>
             services.AddDbContext<ApplicationDbContext>(options =>
@@ -69,6 +70,7 @@ namespace BloggingAPI.Persistence.Extensions
                     DisableGlobalLocks = true
                 });
             });
+
         public static void ConfigureUrlHelper(this IServiceCollection services)
         {
             services.AddScoped<IUrlHelper>(x =>
