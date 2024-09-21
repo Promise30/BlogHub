@@ -6,7 +6,7 @@
         public string? Message { get; set; }
         public T? Data { get; set; }
         public bool Status { get; set; }
-        public IEnumerable<string>? Errors { get; set; }
+        public IEnumerable<T>? Errors { get; set; }
 
         public static ApiResponse<T> Success(short statusCode, T? data, string? message)
         {
@@ -48,7 +48,7 @@
                 Message = message
             };
         }
-        public static ApiResponse<T> Failure(short statusCode, T? data, string message, IEnumerable<string>? errors)
+        public static ApiResponse<T> Failure(short statusCode, T? data, string message, IEnumerable<T>? errors)
         {
             return new ApiResponse<T>()
             {
