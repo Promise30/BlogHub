@@ -42,7 +42,7 @@ This Blog API project is a robust backend solution for managing a blogging platf
    cp .env.example .env
    ```
 3. Run the project
-  ```
-  docker-compose up
-  ```
+   ```
+   docker-compose up
+   ```
 
