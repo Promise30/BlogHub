@@ -1,0 +1,58 @@
+name: blog_api_project
+services:
+  blogdb:
+    container_name: blog_api_db
+    image: mcr.microsoft.com/mssql/server:latest
+    environment:
+        - ACCEPT_EULA=Y
+        - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    networks:
+        - blog_backend   
+    volumes:
+        - mssql_data:/var/opt/mssql
+    ports:
+        - 8001:1433
+  redis_image:
+    image: redis
+    container_name: blog-cache
+    ports:
+        - 6379:6379
+    networks:
+        - blog_backend 
+  bloggingapi:
+    container_name: blogging-api
+    image: ${DOCKER_REGISTRY-}bloggingapi
+    pull_policy: always
+    build:
+      context: .
+      dockerfile: BloggingAPI/Dockerfile
+    networks:
+        - blog_backend
+    environment:
+    - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+    - ConnectionStrings__DefaultConnection=${CONNECTION_STRING}
+    - JwtSettings__validIssuer=${JWT_VALID_ISSUER}
+    - JwtSettings__validAudience=${JWT_VALID_AUDIENCE}
+    - JwtSettings__secretKey=${JWT_SECRET_KEY}
+    - JwtSettings__expires=${JWT_EXPIRES}
+    - EmailConfiguration__UserName=${EMAIL_USERNAME}
+    - EmailConfiguration__SmtpServer=${EMAIL_SMTP_SERVER}
+    - EmailConfiguration__Port=${EMAIL_PORT}
+    - EmailConfiguration__Password=${EMAIL_PASSWORD}
+    - EmailConfiguration__From=${EMAIL_FROM}
+    - CloudinarySettings__CloudName=${CLOUDINARY_CLOUDNAME}
+    - CloudinarySettings__ApiSecret=${CLOUDINARY_APISECRET}
+    - CloudinarySettings__ApiKey=${CLOUDINARY_APIKEY} 
+    ports:
+        - 8002:8080
+        - 8003:8081
+    restart: on-failure
+    depends_on:
+        - blogdb
+        - redis_image
+  
+networks:
+  blog_backend:
+volumes: 
+  mssql_data:
+    
