@@ -70,7 +70,7 @@ namespace BloggingAPI.Services.Implementation
                     var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
                     var errorString = string.Join("; ", errors);
                     _logger.Log(LogLevel.Information, $"Error occured while creating new user {userRegistrationDto.Email}: {errorString}");
-                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
+                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data:null, errors:errors, message: "Request unsuccessful");
                 }
                 _logger.Log(LogLevel.Information, $"New user created with username-> {user.UserName} and id -> {user.Id} at {user.DateCreated}");
                 await _userManager.AddToRolesAsync(user, userRegistrationDto.Roles);
@@ -83,7 +83,7 @@ namespace BloggingAPI.Services.Implementation
 
                 // Enqueue email sending
                 BackgroundJob.Enqueue(() => _emailService.SendEmailAsync(user.Email, "Confirm your email", emailContent));
-                return ApiResponse<object>.Success(200, userToReturn, "Registration Successful");
+                return ApiResponse<object>.Success(201, userToReturn, "Registration Successful");
             }
             catch (Exception ex)
             {
@@ -140,7 +140,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 var user = await _userManager.FindByEmailAsync(forgotPasswordDto.Email);
                 if (user is null)
-                    return ApiResponse<string>.Success(400, null, "Request unsuccessful");
+                    return ApiResponse<string>.Success(404, null, "User not found. Request unsuccessful");
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
                 // Generate email content and setup a background task to handle it
@@ -150,7 +150,7 @@ namespace BloggingAPI.Services.Implementation
 
                 _logger.Log(LogLevel.Information, "Password reset token generated for {userEmail} at {time}: {token}", user.Email, DateTime.Now, token);
 
-                return ApiResponse<string>.Success(200, token, null);
+                return ApiResponse<string>.Success(200, token, "Password reset token successfully generated");
             }
             catch (Exception ex)
             {
@@ -167,7 +167,7 @@ namespace BloggingAPI.Services.Implementation
                     var user = await _userManager.FindByEmailAsync(passwordResetDto.Email);
                     if (user is null)
                         return ApiResponse<object>.Failure(404, "User does not exist");
-                    var resetPasswordResult = await _userManager.ResetPasswordAsync(user, passwordResetDto.Token, passwordResetDto.Password);
+                    var resetPasswordResult = await _userManager.ResetPasswordAsync(user, passwordResetDto.Token, passwordResetDto.NewPassword);
                     if (!resetPasswordResult.Succeeded)
                     {
                         var errorMessages = resetPasswordResult.Errors.Select(e => e.Description).ToList();
@@ -288,7 +288,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 var user = await _userManager.FindByEmailAsync(addUserToRoleDto.Email);
                 if (user == null)
-                    return ApiResponse<object>.Failure(400, "User does not exist");
+                    return ApiResponse<object>.Failure(404, "User does not exist");
 
                 // Get the roles the user currently has
                 var currentRoles = await _userManager.GetRolesAsync(user);
@@ -297,7 +297,7 @@ namespace BloggingAPI.Services.Implementation
                 var rolesToAdd = addUserToRoleDto.Roles.Except(currentRoles).ToList();
 
                 if (!rolesToAdd.Any())
-                    return ApiResponse<object>.Success(200, "User already has the specified role");
+                    return ApiResponse<object>.Failure(409, "User already has the specified role");
 
                 // Add the new roles to the user
                 var result = await _userManager.AddToRolesAsync(user, rolesToAdd);
@@ -305,7 +305,7 @@ namespace BloggingAPI.Services.Implementation
                 {
                     var errorMessage = result.Errors.Select(e => e.Description).ToList();
                     _logger.Log(LogLevel.Information, "Error occurred while adding roles to user: {errors}", errorMessage.ToList());
-                    return ApiResponse<object>.Failure(400, "Request unsuccessful");
+                    return ApiResponse<object>.Failure(400, null, "Request unsuccessful", errors: errorMessage );
                 }
                 return ApiResponse<object>.Success(200, "Request successful");
             }
@@ -322,7 +322,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 _user = await _userManager.FindByEmailAsync(removeUserFromRoleDto.Email);
                 if (_user == null)
-                    return ApiResponse<object>.Failure(400, "User does not exist");
+                    return ApiResponse<object>.Failure(404, "User does not exist");
                 var result = await _userManager.RemoveFromRolesAsync(_user, removeUserFromRoleDto.Roles);
                 if (!result.Succeeded)
                 {
@@ -345,7 +345,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 _user = await _userManager.FindByEmailAsync(email);
                 if (_user == null)
-                    return ApiResponse<IEnumerable<string>>.Failure(400, "User does not exist");
+                    return ApiResponse<IEnumerable<string>>.Failure(404, "User does not exist");
                 var result = await _userManager.GetRolesAsync(_user);
 
                 _logger.Log(LogLevel.Information, $"Roles assigned to {_user.Email}: {result.ToList()}");
@@ -423,7 +423,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.Log(LogLevel.Information, $"Error occured while changing user password: {ex.Message}");
-                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+                return ApiResponse<object>.Failure(500, "Request unsuccesful");
 
             }
         }
@@ -431,8 +431,8 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-                var ApplicationUserId = _httpContextAccessor.HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                _user = await _userManager.FindByIdAsync(ApplicationUserId);
+                _user = await _userManager.FindByEmailAsync(changeEmailDto.CurrentEmail);
+                
                 if (_user is null)
                     return ApiResponse<object>.Failure(404, "User does not exist");
                 if (_user.Email == changeEmailDto.NewEmail)
@@ -450,7 +450,7 @@ namespace BloggingAPI.Services.Implementation
             {
                 _logger.Log(LogLevel.Error, ex.StackTrace);
                 _logger.Log(LogLevel.Information, $"Error occured while changing user password: {ex.Message}");
-                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+                return ApiResponse<object>.Failure(500, "Request unsuccesful");
 
             }
         }
@@ -458,7 +458,7 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-                _user = await _userManager.FindByIdAsync(oldEmail);
+                _user = await _userManager.FindByEmailAsync(oldEmail);
                 if (_user is null)
                 {
                     return ApiResponse<object>.Failure(404, null, "User does not exist");
@@ -469,7 +469,7 @@ namespace BloggingAPI.Services.Implementation
                     _logger.Log(LogLevel.Information, $"Email confirmation successful for {_user.UserName} at {DateTime.Now}");
                     return ApiResponse<object>.Success(200, "New User email verification successful");
                 }
-                return ApiResponse<object>.Failure(400, result.Errors.Select(x => new { error = x.Code, x.Description }), "User email verification failed.");
+                return ApiResponse<object>.Failure(400, null, errors: result.Errors.Select(x => new { error = x.Code, x.Description }), message: "User email verification failed.");
 
             }
             catch (Exception ex)
@@ -483,36 +483,62 @@ namespace BloggingAPI.Services.Implementation
         {
             try
             {
-                var ApplicationUserId = _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var userEntity = await _userManager.FindByIdAsync(ApplicationUserId);
-                if (userEntity is null)
-                    return ApiResponse<object>.Failure(404, "User does not exist");
+                var currentUserId = _httpContextAccessor?.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (currentUserId == null)
+                    return ApiResponse<object>.Failure(401, "Unauthorized. Request unsuccessful");
 
-                if (userEntity.FirstName != null)
-                    userEntity.FirstName = updateUserDto.FirstName;
-                if (userEntity.LastName != null)
-                    userEntity.LastName = updateUserDto.LastName;
-                if (userEntity.PhoneCountryCode != null)
-                    userEntity.PhoneCountryCode = updateUserDto.PhoneCountryCode;
-                if (userEntity.PhoneNumber != null)
-                    userEntity.PhoneNumber = updateUserDto.PhoneNumber;
-                userEntity.DateModified = DateTime.UtcNow;
+                var userEntity = await _userManager.FindByIdAsync(currentUserId);
+                if (userEntity == null)
+                    return ApiResponse<object>.Failure(404, "User not found");
 
-                IdentityResult result = await _userManager.UpdateAsync(userEntity);
-                if (!result.Succeeded)
+                bool isModified = false;
+
+                if (updateUserDto.FirstName != null)
                 {
-                    var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
-                    var errorString = string.Join("; ", errors);
-                    _logger.Log(LogLevel.Information, $"Error occured while updating user details {userEntity.Email}: {errorString}");
-                    return ApiResponse<object>.Failure(statusCode: StatusCodes.Status400BadRequest, data: errors, message: "Request unsuccessful");
+                    userEntity.FirstName = updateUserDto.FirstName.Trim();
+                    isModified = true;
                 }
-                return ApiResponse<object>.Success(204, null);
+
+                if (updateUserDto.LastName != null)
+                {
+                    userEntity.LastName = updateUserDto.LastName.Trim();
+                    isModified = true;
+                }
+
+                if (updateUserDto.PhoneCountryCode != null)
+                {
+                    userEntity.PhoneCountryCode = updateUserDto.PhoneCountryCode.Trim();
+                    isModified = true;
+                }
+
+                if (updateUserDto.PhoneNumber != null)
+                {
+                    userEntity.PhoneNumber = updateUserDto.PhoneNumber.Trim();
+                    isModified = true;
+                }
+
+                if (isModified)
+                {
+                    userEntity.DateModified = DateTime.UtcNow;
+                    IdentityResult result = await _userManager.UpdateAsync(userEntity);
+                    if (!result.Succeeded)
+                    {
+                        var errors = result.Errors.Select(x => new { error = x.Code, x.Description });
+                        var errorString = string.Join("; ", errors);
+                        _logger.LogError("Error occurred while updating user details for {Email}: {ErrorString}", userEntity.Email, errorString);
+                        return ApiResponse<object>.Failure(StatusCodes.Status400BadRequest, null, errors: errors, message: "Request unsuccessful");
+                    }
+                    return ApiResponse<object>.Success(200, "User profile updated successfully");
+                }
+
+                return ApiResponse<object>.Success(200,  "No changes were made to the user profile");
             }
             catch (Exception ex)
             {
                 _logger.Log(LogLevel.Error, ex.StackTrace);
-                _logger.Log(LogLevel.Information, $"Error occured while trying to update user details: {ex.Message}");
-                return ApiResponse<object>.Failure(400, "Request unsuccesful");
+                _logger.Log(LogLevel.Information, $"Error occurred while updating user profile: {ex.Message}");
+                return ApiResponse<object>.Failure(500, "Request unsuccessful");
+
             }
         }
 

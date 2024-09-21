@@ -8,9 +8,10 @@ namespace BloggingAPI.Services.Implementation
 {
     public class RedisCacheService : IRedisCacheService
     {
-        private readonly IDistributedCache? _cache;
+        private readonly IDistributedCache _cache;
         private readonly JsonSerializerOptions _jsonOptions;
-        public RedisCacheService(IDistributedCache? cache)
+
+        public RedisCacheService(IDistributedCache cache)
         {
             _cache = cache;
             _jsonOptions = new JsonSerializerOptions
@@ -22,28 +23,26 @@ namespace BloggingAPI.Services.Implementation
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
         }
-        public T GetCachedData<T>(string key)
+
+        public async Task<T> GetCachedDataAsync<T>(string key)
         {
-            var jsonData = _cache.GetString(key);
-            if(jsonData is null)
+            var jsonData = await _cache.GetStringAsync(key);
+            if (string.IsNullOrEmpty(jsonData))
                 return default(T);
-            return JsonSerializer.Deserialize<T>(jsonData, _jsonOptions)!;
+            return JsonSerializer.Deserialize<T>(jsonData, _jsonOptions);
         }
 
-        public void SetCachedData<T>(string key, T data, TimeSpan cacheDuration)
+        public async Task SetCachedDataAsync<T>(string key, T data, TimeSpan cacheDuration)
         {
             var options = new DistributedCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = cacheDuration,
                 SlidingExpiration = TimeSpan.FromMinutes(1)
             };
-            // Use ReferenceHandler.Preserve to handle cycles
-
-            var jsonDate = JsonSerializer.Serialize(data, _jsonOptions);
-            _cache.SetString(key, jsonDate, options);    
-            //var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data, _jsonOptions));
-            //_cache.SetAsync(key, bytes, options);
+            var jsonData = JsonSerializer.Serialize(data, _jsonOptions);
+            await _cache.SetStringAsync(key, jsonData, options);
         }
-        public void RemoveCache(string key) => _cache.Remove(key);
+
+        public async Task RemoveCacheAsync(string key) => await _cache.RemoveAsync(key);
     }
 }
