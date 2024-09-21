@@ -55,18 +55,19 @@ namespace BloggingAPI.Persistence.Repositories
                     .ToListAsync();
             return new PagedList<Post>(posts, count, postParameters.PageNumber, postParameters.PageSize);
         }
-        public async Task<Post> GetPostAsync(int id) => await FindByCondition(p => p.PostId == id)
+        public async Task<Post?> GetPostAsync(int id) => await FindByCondition(p => p.PostId == id)
                                                                 .Include(p=> p.TagLinks)
                                                                         .ThenInclude(pt => pt.Tag)
                                                                 .Include(c=> c.Comment)
                                                                         .ThenInclude(cv=> cv.Votes)
-                                                                .SingleAsync();
-        public async Task<Post> GetPostWithUserAsync(int id) => await FindByCondition(p => p.PostId == id)
+                                                                .FirstOrDefaultAsync();
+        public async Task<Post?> GetPostWithUserAsync(int id) => await FindByCondition(p => p.PostId == id)
                                                                         .Include(p => p.User)
-                                                                        .SingleAsync();
-        public async Task<Post> GetPostWithTagsAsync(int id) => await FindByCondition(p => p.PostId == id)
+                                                                        .FirstOrDefaultAsync();
+        public async Task<Post?> GetPostWithTagsAsync(int id) => await FindByCondition(p => p.PostId == id)
                                                                         .Include(p => p.TagLinks)
-                                                                        .SingleAsync();
+                                                                            .ThenInclude(t=> t.Tag)
+                                                                        .FirstOrDefaultAsync();
         public bool PostExists(int id) => FindByCondition(p => p.PostId == id).Any();
     }
 }

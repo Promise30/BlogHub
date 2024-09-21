@@ -25,9 +25,10 @@ namespace BloggingAPI.Persistence.Repositories
         {
             Delete(comment);
         }
-        public async Task<Comment?> GetCommentForPostAsync(int postId, int commentId)
+        public async Task<Comment?> GetCommentForPostAsync(int commentId)
         {
-            return await FindByCondition(c => c.PostId == postId && c.Id == commentId)
+            return await FindByCondition(c=> c.Id == commentId)
+                    .Include(c=> c.Post)
                     .SingleOrDefaultAsync();
         }
 
@@ -44,5 +45,7 @@ namespace BloggingAPI.Persistence.Repositories
             return PagedList<Comment>.ToPagedList(comments, commentParameters.PageNumber, commentParameters.PageSize);
 
         }
+
+        public async Task<Comment?> GetComment(int commentId) => await FindByCondition(c=> c.Id == commentId).SingleOrDefaultAsync();
     }
 }
