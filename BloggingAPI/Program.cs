@@ -1,4 +1,5 @@
 using BloggingAPI.Domain.Repositories;
+using BloggingAPI.Persistence;
 using BloggingAPI.Persistence.Extensions;
 using BloggingAPI.Persistence.Repositories;
 using BloggingAPI.Services.Constants;
@@ -7,7 +8,7 @@ using BloggingAPI.Services.Interface;
 using Hangfire;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using static BloggingAPI.Persistence.Extensions.ServiceExtensions;
 Log.Logger = new LoggerConfiguration()
@@ -17,14 +18,21 @@ try
 {
     Log.Information("starting server.");
     var builder = WebApplication.CreateBuilder(args);
+    builder.Configuration
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+                .AddEnvironmentVariables()
+                .AddCommandLine(args);
     builder.Host.UseSerilog((context, loggerConfiguration) =>
     {
         loggerConfiguration.WriteTo.Console();
         loggerConfiguration.ReadFrom.Configuration(context.Configuration);
     });
     // Add services to the container.
+    builder.Services.ConfigureCors();
     builder.Services.Configure<EmailConfiguration>(builder.Configuration.GetSection("EmailConfiguration"));
-    builder.Services.AddSingleton(e => e.GetRequiredService<IOptions<EmailConfiguration>>().Value);
+    
     builder.Services.ConfigureSqlContext(builder.Configuration);
     builder.Services.AddScoped<IRepositoryManager, RepositoryManager>();
     builder.Services.ConfigureIdentity();
@@ -38,7 +46,6 @@ try
     builder.Services.ConfigureHangFire(builder.Configuration);
     builder.Services.AddHangfireServer();
     builder.Services.ConfigureAuthentication(builder.Configuration);
-    builder.Services.ConfigureCors();
     builder.Services.Configure<ApiBehaviorOptions>(options =>
     {
         options.SuppressModelStateInvalidFilter = true;
@@ -59,36 +66,38 @@ try
     builder.Services.ConfigureSwaggerGen();
     builder.Services.AddEndpointsApiExplorer();
     var app = builder.Build();
-    //using (var scope = app.Services.CreateScope())
-    //{
-    //    var services = scope.ServiceProvider;
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
 
-    //    try
-    //    {
-    //        var dbContext = services.GetRequiredService<ApplicationDbContext>();
-    //        if (dbContext.Database.IsSqlServer())
-    //        {
-    //            dbContext.Database.Migrate();
-    //        }
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //        var logger = services.GetRequiredService<ILogger<Program>>();
-    //        logger.LogError(ex, "An error occurred while migrating the database.");
-    //        throw;
-    //    }
-    //}
+        try
+        {
+            var dbContext = services.GetRequiredService<ApplicationDbContext>();
+            if (dbContext.Database.IsSqlServer())
+            {
+                dbContext.Database.Migrate();
+            }
+        }
+        catch (Exception ex)
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "An error occurred while migrating the database.");
+            throw;
+        }
+    }
     // Configure the HTTP request pipeline.
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
         app.UseSwaggerUI();
     }
+    app.UseSerilogRequestLogging();
+    app.UseHangfireDashboard();
     app.UseHttpsRedirection();
+    app.UseCors("CorsPolicy");
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseHangfireDashboard();
-    app.UseCors();
     app.MapControllers();
     app.Run();
 }
