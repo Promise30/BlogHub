@@ -8,5 +8,6 @@ namespace BloggingAPI.Domain.Repositories
         void DeleteCommentVote(CommentVote commentVote);
         void UpdateCommentVote(CommentVote commentVote);
         Task<CommentVote?> GetCommentVoteForCommentAsync(int commentId, string ApplicationUserId);
+        Task<(int upvoteCount, int downvoteCount)> GetCommentVoteCountsAsync(int commentId);
     }
 }
