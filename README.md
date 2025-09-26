@@ -1,48 +1,122 @@
-# Blog API Project
+# BlogHub 
 
-## Overview
-This Blog API project is a robust backend solution for managing a blogging platform. Built with ASP.NET Core, it provides a RESTful API for creating, reading, updating, and deleting blog posts, managing users, and handling comments and post tags. It also provides a comprehensive set of functionalities for user authentication and account management. The project uses SQL Server for data persistence and Redis for caching, all containerized with Docker for easy deployment and scalability.
+BlogHub is a C#/.NET REST API for creating and managing blog content. It provides full CRUD operations for blog posts, comments, tags, and user management with JWT authentication.
+
 
 ## Features
-<ul>
-  <li>User Authentication: Secure user registration and login using JWT.</li>
-  <li>Account Management: Users can create, update, and manage their accounts.</li>
-  <li>Posts CRUD Operations: Endpoints for creating, reading, updating, and deleting blog posts.</li>
-  <li>Comments CRUD Operations: Endpoints for adding, updating, and deleting comments on posts.</li>
-  <li>Tags CRUD Operations: Endpoints for creating, reading, updating and deleting tags.</li>
-  <li>Image Upload: Integration with Cloudinary for image uploads.</li>
-  <li>Mailing System: Gmail service integration for sending emails (e.g., account verification, password reset, new post and comment notification).</li>
-</ul>
 
-## Technologies Used
-<ul>
-  <li>C# and .NET 8: Backend development framework.</li>
-  <li>SQL Server: Database management system.</li>
-  <li>Cloudinary: Cloud-based image and video management service.</li>
-  <li>Gmail API: Service for sending emails.</li>
-</ul>
+- **Blog Posts**: Create, read, update, and delete blog posts with cover images
+- **Comments**: Add comments to posts with voting system (upvote/downvote)
+- **Tags**: Organize posts with tagging system
+- **User Management**: Complete authentication and authorization system
+- **File Upload**: Image upload support via Cloudinary integration
+- **Caching**: Redis-based caching for improved performance
+- **Background Jobs**: Hangfire integration for email notifications
+- Pagination, sorting, and filtering on list endpoints
+
+## Tech Stack
+
+- **.NET 8.0** - Framework
+- **ASP.NET Core Web API** - Web framework
+- **Entity Framework Core** - ORM
+- **SQL Server** - Database
+- **JWT Bearer** - Authentication
+- **Redis** - Caching
+- **Cloudinary** - Image storage
+- **Hangfire** - Background job processing
+- **Serilog** - Logging
+- **Swagger/OpenAPI** - API documentation
+- **Docker** - Containerization
 
 ## Getting Started
-### Prerequisites
-<ul>
-  <li>.NET SDK (version 8.0)</li>
-  <li>SQL Server</li>
-  <li>Cloudinary Account for image management.</li>
-  <li>Gmail Account with less secure apps enabled.</li>
-</ul>
 
-## Installation
-1. Clone the repository
-   ```
-   https://github.com/Promise30/BlogApiService.git
-   cd BlogApiService
-   ```
-2. Set up the project environment variables. Copy the .env.example file to a new file named .env and provide your own values:
-   ```
-   cp .env.example .env
-   ```
-3. Run the project
-   ```
-   docker-compose up
-   ```
-<i>This will start the API, the SQL Server database and the redis cache. The API will be available at <b>http://localhost:8002/swagger</b> OR <b>https://localhost:8003/swagger</b></i>
+### Prerequisites
+
+- .NET 8.0 SDK
+- SQL Server (LocalDB or full instance)
+- Redis Server
+- Cloudinary Account (for image upload)
+- SMTP Server configuration (for email notifications)
+
+### Clone
+
+```bash
+git clone https://github.com/Promise30/BlogHub.git
+cd BlogHub
+```
+
+### Configure
+
+Update `appsettings.json` (and/or `appsettings.Development.json`) with your connection string and any other settings.
+
+Example (adjust to your environment):
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=BlogHub;Trusted_Connection=True;MultipleActiveResultSets=true"
+  }
+}
+```
+
+### Database
+
+If using EF Core, apply migrations:
+
+```bash
+dotnet ef database update
+```
+If you are not using EF Core, remove this section and document your actual data setup.
+
+### Run
+
+From the project directory that contains your web API entry point:
+
+```bash
+dotnet restore
+dotnet build
+dotnet run
+```
+
+By default, ASP.NET Core listens on:
+- http://localhost:5174 and https://localhost:7156
+
+## Using the API
+
+Below are some of the API endpoints:
+### Authentication
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - User login
+
+### Posts
+- `GET /api/posts/user-posts` - Get user's posts
+- `POST /api/posts` - Create new post
+
+### Comments
+- `POST /api/comments/posts/{id}` - Create comment
+- `PUT /api/comments/{id}` - Update comment
+
+
+## Docker Support
+
+Build and run with Docker:
+```bash
+docker build -t blogging-api . docker run -p 8080:80 blogging-api
+```
+Or use Docker Compose:
+```bash
+docker-compose up -d
+```
+
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
